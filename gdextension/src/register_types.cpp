@@ -1,6 +1,9 @@
 #include "register_types.h"
 
 #include "game_engine.h"
+#include "game_map.h"
+#include "game_player.h"
+#include "game_unit.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
@@ -15,6 +18,9 @@ void initialize_maxtreme_module(ModuleInitializationLevel p_level) {
     }
 
     ClassDB::register_class<GameEngine>();
+    ClassDB::register_class<GameMap>();
+    ClassDB::register_class<GamePlayer>();
+    ClassDB::register_class<GameUnit>();
 }
 
 void uninitialize_maxtreme_module(ModuleInitializationLevel p_level) {

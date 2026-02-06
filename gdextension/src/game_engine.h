@@ -4,26 +4,34 @@
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/array.hpp>
 
 #include <memory>
 
 // Forward declarations of M.A.X.R. core types
 class cModel;
-class cStaticMap;
 class cUnitsData;
+
+// Forward declarations of wrapper types
+namespace godot {
+class GameMap;
+class GamePlayer;
+class GameUnit;
+}
 
 namespace godot {
 
 /// GameEngine - The main bridge between Godot and the M.A.X.R. C++ engine.
 ///
-/// Phase 1b: Proves the core C++ engine compiles and is accessible from GDScript.
-/// Phase 2+: Will wrap cModel, cServer, actions, pathfinding, etc.
+/// Phase 2: Full data bridge. Exposes cModel, cMap, cPlayer, and cUnit data
+/// to GDScript via GameMap, GamePlayer, and GameUnit wrapper objects.
 class GameEngine : public Node {
     GDCLASS(GameEngine, Node)
 
 private:
     bool engine_initialized = false;
     std::unique_ptr<cModel> model;
+    std::shared_ptr<cUnitsData> unitsData;
 
 protected:
     static void _bind_methods();
@@ -32,16 +40,28 @@ public:
     GameEngine();
     ~GameEngine();
 
-    // Phase 1: Proof of life
+    // --- Lifecycle ---
     String get_engine_version() const;
     String get_engine_status() const;
     bool is_engine_initialized() const;
     void initialize_engine();
 
-    // Phase 1b: Core engine access
+    // --- Game state ---
     int get_turn_number() const;
-    String get_map_name() const;
     int get_player_count() const;
+
+    // --- Map access ---
+    Ref<GameMap> get_map() const;
+    String get_map_name() const;
+
+    // --- Player access ---
+    Ref<GamePlayer> get_player(int index) const;
+    Array get_all_players() const;
+
+    // --- Unit access ---
+    Ref<GameUnit> get_unit_by_id(int player_index, int unit_id) const;
+    Array get_player_vehicles(int player_index) const;
+    Array get_player_buildings(int player_index) const;
 };
 
 } // namespace godot
