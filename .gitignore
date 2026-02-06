@@ -1,0 +1,27 @@
+# Godot
+.godot/
+*.import
+
+# GDExtension build artifacts
+gdextension/godot-cpp/bin/
+gdextension/godot-cpp/gen/
+gdextension/.sconsign.dblite
+gdextension/**/*.o
+gdextension/**/*.os
+
+# Compiled binaries (keep .gdextension, ignore built libs)
+bin/*.framework/
+bin/*.dll
+bin/*.so
+bin/*.dylib
+bin/*.pdb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
