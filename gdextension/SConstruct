@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 SConstruct for MaXtreme GDExtension
-Builds the C++ game engine as a Godot GDExtension
+Builds the M.A.X.R. C++ game engine + Godot wrapper as a GDExtension
 """
 import os
 import sys
@@ -9,12 +9,74 @@ import sys
 # --- Auto-detect godot-cpp ---
 env = SConscript("godot-cpp/SConstruct")
 
-# --- Extension source files ---
-# For now, just the GDExtension entry point and wrapper classes
-# Later phases will add the full maxr engine sources
-env.Append(CPPPATH=["src/"])
+# --- C++20 standard ---
+if env["platform"] == "macos":
+    env.Append(CCFLAGS=["-std=c++20"])
+elif env["platform"] == "linux":
+    env.Append(CCFLAGS=["-std=c++20"])
+elif env["platform"] == "windows":
+    env.Append(CCFLAGS=["/std:c++20"])
 
+# --- Re-enable C++ exceptions (godot-cpp disables them, but MAXR engine needs them) ---
+if env["platform"] in ["macos", "linux"]:
+    env.Append(CCFLAGS=["-fexceptions"])
+    # Remove -fno-exceptions if godot-cpp added it
+    env["CCFLAGS"] = [f for f in env["CCFLAGS"] if f != "-fno-exceptions"]
+elif env["platform"] == "windows":
+    env.Append(CCFLAGS=["/EHsc"])
+
+# --- Include paths ---
+env.Append(CPPPATH=[
+    "src/",                                  # GDExtension wrapper sources
+    "src/maxr/",                             # M.A.X.R. engine root (for includes like "game/..." and "utility/...")
+    "src/maxr/3rdparty/",                    # nlohmann/json, spiritless_po
+])
+
+# SDL stub headers and 3rdparty system includes need -isystem so <SDL.h> angle-bracket includes work
+if env["platform"] in ["macos", "linux"]:
+    env.Append(CCFLAGS=[
+        "-isystem", Dir("src/maxr/stubs/SDL").abspath,
+        "-isystem", Dir("src/maxr/3rdparty/spiritless_po_include").abspath,
+    ])
+elif env["platform"] == "windows":
+    env.Append(CPPPATH=["src/maxr/stubs/SDL/", "src/maxr/3rdparty/spiritless_po/"])
+
+# --- Suppress warnings from engine code (it's third-party to us) ---
+env.Append(CCFLAGS=["-Wno-unused-parameter", "-Wno-sign-compare", "-Wno-unused-variable"])
+
+# --- Collect source files ---
+# GDExtension wrapper sources
 sources = Glob("src/*.cpp")
+
+# M.A.X.R. engine sources
+maxr_dirs = [
+    "src/maxr/game/data",
+    "src/maxr/game/data/base",
+    "src/maxr/game/data/gui",
+    "src/maxr/game/data/map",
+    "src/maxr/game/data/player",
+    "src/maxr/game/data/report",
+    "src/maxr/game/data/report/special",
+    "src/maxr/game/data/report/unit",
+    "src/maxr/game/data/units",
+    "src/maxr/game/logic",
+    "src/maxr/game/logic/action",
+    "src/maxr/game/logic/jobs",
+    "src/maxr/game/protocol",
+    "src/maxr/game/startup",
+    "src/maxr/game",
+    "src/maxr/utility",
+    "src/maxr/utility/serialization",
+    "src/maxr/utility/signal",
+    "src/maxr/utility/string",
+    "src/maxr/utility/thread",
+    "src/maxr/chatcommand",
+    "src/maxr/mapdownloader",
+    "src/maxr",
+]
+
+for d in maxr_dirs:
+    sources += Glob(d + "/*.cpp")
 
 # --- Build the shared library ---
 if env["platform"] == "macos":

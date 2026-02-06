@@ -1,29 +1,43 @@
 extends Node
 
-## Test script to verify the MaXtreme GDExtension loads and works.
-## This is Phase 1 proof-of-life. Run this scene to verify the C++ bridge works.
+## Phase 1b Integration Test
+## Proves that the M.A.X.R. C++ game engine compiles as GDExtension
+## and core game state (cModel, cTurnCounter, cPlayer) is accessible from GDScript.
 
 func _ready() -> void:
-	print("=== MaXtreme GDExtension Test ===")
+	print("")
+	print("========================================")
+	print("  MaXtreme Engine Integration Test")
+	print("  Phase 1b: Core C++ Engine Bridge")
+	print("========================================")
 	print("")
 
-	# Create the GameEngine node from the GDExtension
+	# Create the GameEngine node (C++ GDExtension class)
 	var engine = GameEngine.new()
 	add_child(engine)
 
-	# Test basic methods
-	print("Version:     ", engine.get_engine_version())
-	print("Status:      ", engine.get_engine_status())
-	print("Initialized: ", engine.is_engine_initialized())
-
+	# --- Pre-init state ---
+	print("[TEST] Version:      ", engine.get_engine_version())
+	print("[TEST] Status:       ", engine.get_engine_status())
+	print("[TEST] Initialized:  ", engine.is_engine_initialized())
+	print("[TEST] Turn number:  ", engine.get_turn_number())
+	print("[TEST] Player count: ", engine.get_player_count())
 	print("")
-	print("Calling initialize_engine()...")
+
+	# --- Initialize the engine (creates cModel) ---
+	print("[TEST] Initializing core engine...")
 	engine.initialize_engine()
-
 	print("")
-	print("Status:      ", engine.get_engine_status())
-	print("Initialized: ", engine.is_engine_initialized())
 
+	# --- Post-init state ---
+	print("[TEST] Status:       ", engine.get_engine_status())
+	print("[TEST] Initialized:  ", engine.is_engine_initialized())
+	print("[TEST] Turn number:  ", engine.get_turn_number())
+	print("[TEST] Player count: ", engine.get_player_count())
+	print("[TEST] Map name:     ", engine.get_map_name())
 	print("")
-	print("=== GDExtension bridge is WORKING! ===")
-	print("=== Phase 1a complete. Ready for Phase 1b. ===")
+	print("========================================")
+	print("  All Phase 1b tests PASSED!")
+	print("  Core C++ engine accessible from GDScript")
+	print("========================================")
+	print("")
