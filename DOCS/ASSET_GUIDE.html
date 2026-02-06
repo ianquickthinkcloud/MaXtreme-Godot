@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaXtreme - Sprite &amp; Asset Guide</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d29922;
+    --accent4: #f85149;
+    --accent5: #bc8cff;
+    --accent6: #39d353;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1a1e2e 0%, #0d1117 50%, #1a1a2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+
+  header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--accent), var(--accent5));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .intro {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .intro h2 { color: var(--accent); margin-bottom: 0.5rem; }
+  .intro p { color: var(--text-dim); }
+
+  .stats-bar {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+
+  .stat {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .stat .number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+  }
+
+  .stat .label {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .category {
+    margin-bottom: 2.5rem;
+  }
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .category-header .icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .category-header h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+  }
+
+  .category-header .count {
+    margin-left: auto;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.2rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  thead { background: var(--surface2); }
+
+  th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95rem;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: rgba(88, 166, 255, 0.04); }
+
+  .sprite-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-right: 0.25rem;
+  }
+
+  .tag-ground { background: #1a3a1a; color: #3fb950; }
+  .tag-sea { background: #1a2a3a; color: #58a6ff; }
+  .tag-air { background: #2a1a3a; color: #bc8cff; }
+  .tag-alien { background: #3a1a1a; color: #f85149; }
+  .tag-big { background: #2a2a1a; color: #d29922; }
+  .tag-small { background: #1a2a2a; color: #39d353; }
+  .tag-anim { background: #2a1a2a; color: #db61a2; }
+  .tag-fx { background: #3a2a1a; color: #f0883e; }
+
+  .size-info {
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    font-size: 0.85rem;
+    color: var(--accent3);
+  }
+
+  .priority-high { color: var(--accent4); font-weight: 600; }
+  .priority-med { color: var(--accent3); }
+  .priority-low { color: var(--text-dim); }
+
+  .notes {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-dim);
+  }
+
+  .notes strong { color: var(--text); }
+
+  .spec-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .spec-box h3 {
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+    font-size: 1.1rem;
+  }
+
+  .spec-box ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .spec-box li {
+    padding: 0.3rem 0;
+    color: var(--text-dim);
+  }
+
+  .spec-box li::before {
+    content: "▸ ";
+    color: var(--accent);
+  }
+
+  .spec-box code {
+    background: var(--surface2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    color: var(--accent3);
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MaXtreme Sprite &amp; Asset Guide</h1>
+  <p>Complete catalogue of every visual asset needed to replace placeholder graphics. Organised by category with specifications, sizes, and priority levels.</p>
+</header>
+
+<div class="container">
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat"><span class="number">37</span><span class="label">Vehicle Sprites</span></div>
+  <div class="stat"><span class="number">35</span><span class="label">Building Sprites</span></div>
+  <div class="stat"><span class="number">4</span><span class="label">Terrain Tiles</span></div>
+  <div class="stat"><span class="number">14</span><span class="label">Effects / FX</span></div>
+  <div class="stat"><span class="number">12</span><span class="label">UI Elements</span></div>
+</div>
+
+<!-- Intro / Specifications -->
+<div class="intro">
+  <h2>General Specifications</h2>
+  <p>All game assets sit on a <strong>64&times;64 pixel tile grid</strong>. Units and buildings must fit within this grid. Player-owned units should be tintable to the player's colour (use white/grey base with a colour overlay, or design with a clear team-colour region).</p>
+</div>
+
+<div class="spec-box">
+  <h3>Art Style Recommendations</h3>
+  <ul>
+    <li>Original game used <strong>pre-rendered 3D sprites</strong> in an isometric-ish top-down view</li>
+    <li>Modern approach: clean <strong>top-down pixel art</strong> or <strong>hand-painted</strong> style at 64&times;64</li>
+    <li>Each unit needs <strong>8 directional frames</strong> (N, NE, E, SE, S, SW, W, NW) for rotation</li>
+    <li>Export as <strong>PNG with transparency</strong></li>
+    <li>Use a consistent <strong>colour palette</strong> across all assets</li>
+    <li>Player colour should be a distinct region (e.g. hull stripe, banner) that can be recoloured</li>
+  </ul>
+</div>
+
+<div class="spec-box">
+  <h3>File Format &amp; Sizes</h3>
+  <ul>
+    <li>Format: <code>PNG</code> with alpha channel</li>
+    <li>Standard unit: <code>64&times;64 px</code> per frame</li>
+    <li>Big building (2&times;2 tiles): <code>128&times;128 px</code></li>
+    <li>Small building (1&times;1 tile): <code>64&times;64 px</code></li>
+    <li>Terrain tiles: <code>64&times;64 px</code>, seamlessly tileable</li>
+    <li>Directional sprites: <code>512&times;64 px</code> sprite sheet (8 frames) or individual files</li>
+    <li>Effects/FX: variable size, typically <code>64&times;64</code> to <code>128&times;128</code> per frame</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TERRAIN TILES -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #1a3a1a;">🌍</div>
+    <h2>Terrain Tiles</h2>
+    <span class="count">4 base types + variants</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Tile</th><th>Description</th><th>Size</th><th>Variants Needed</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="sprite-name">Ground</td>
+        <td>Default land terrain. Earthy/dirt/grass mix.</td>
+        <td class="size-info">64&times;64</td>
+        <td>4-8 variants for visual variety. Must tile seamlessly.</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Water</td>
+        <td>Deep water. Ships and subs operate here.</td>
+        <td class="size-info">64&times;64</td>
+        <td>2-4 variants. Optional: 2-frame animation for gentle waves.</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Coast</td>
+        <td>Shore/beach between land and water.</td>
+        <td class="size-info">64&times;64</td>
+        <td>8+ edge variants (transitions between water and land in all directions).</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Blocked</td>
+        <td>Impassable mountain/rock terrain.</td>
+        <td class="size-info">64&times;64</td>
+        <td>4-8 variants. Rocky, mountainous look.</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="notes">
+    <strong>Note:</strong> The original game stored ~400 terrain tile graphics per map in the WRL map file. For the new version, a tileset of 30-50 well-designed tiles with auto-tiling rules will produce better results. Coast transitions are the most complex&mdash;consider using Godot's <code>TileMapLayer</code> auto-tile system.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- GROUND VEHICLES -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #1a3a1a;">🚛</div>
+    <h2>Ground Vehicles</h2>
+    <span class="count">19 units</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Unit</th><th>Role</th><th>Weapon</th><th>Tags</th><th>Frames</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="sprite-name">Constructor</td>
+        <td>Builds large buildings (2&times;2). Core unit.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir + build anim</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Engineer (Pioneer)</td>
+        <td>Builds small buildings (1&times;1), roads, bridges. Clears terrain.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir + build anim</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Surveyor</td>
+        <td>Reveals underground resources on the map.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Tank</td>
+        <td>Main battle tank. Heavy armour and firepower.</td>
+        <td>Big</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir + tracks</td>
+        <td class="priority-high">HIGH</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Assault Gun</td>
+        <td>Self-propelled artillery. Powerful but slower.</td>
+        <td>Big</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-med">MED</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Scout</td>
+        <td>Fast recon. Can cross shallow water.</td>
+        <td>Small</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-med">MED</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Mobile AA</td>
+        <td>Anti-aircraft vehicle. Protects ground forces from air.</td>
+        <td>MedLong</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-med">MED</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Rocket Launcher</td>
+        <td>Area-of-effect cluster rockets. 2-tile blast radius.</td>
+        <td>RocketCluster</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-med">MED</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Missile Vehicle</td>
+        <td>Long-range missile launcher.</td>
+        <td>Rocket</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-med">MED</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Infantry</td>
+        <td>Human soldiers. Cheap, animated walk cycle.</td>
+        <td>Rocket</td>
+        <td><span class="tag tag-ground">Ground</span><span class="tag tag-anim">Animated</span></td>
+        <td class="size-info">8 dir + walk anim</td>
+        <td class="priority-med">MED</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Commando (Infiltrator)</td>
+        <td>Stealth unit. Can capture/disable enemy buildings.</td>
+        <td>Sniper</td>
+        <td><span class="tag tag-ground">Ground</span><span class="tag tag-anim">Animated</span></td>
+        <td class="size-info">8 dir + walk anim</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">APC</td>
+        <td>Armoured personnel carrier. Transports infantry.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Mine Layer</td>
+        <td>Plants land mines.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Scanner</td>
+        <td>Extended detection range. Reveals stealth units.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Repair Vehicle</td>
+        <td>Mobile repair. Heals friendly units.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Bulldozer</td>
+        <td>Clears rubble and obstacles.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Metal Transport</td>
+        <td>Hauls metal between bases.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Oil Transport</td>
+        <td>Hauls oil between bases.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+      <tr>
+        <td class="sprite-name">Gold Transport</td>
+        <td>Hauls gold between bases.</td>
+        <td>&mdash;</td>
+        <td><span class="tag tag-ground">Ground</span></td>
+        <td class="size-info">8 dir</td>
+        <td class="priority-low">LOW</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- NAVAL UNITS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #1a2a3a;">🚢</div>
+    <h2>Naval Units</h2>
+    <span class="count">8 units</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Unit</th><th>Role</th><th>Weapon</th><th>Tags</th><th>Frames</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Gunboat</td><td>Heavy naval firepower.</td><td>Big</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Escort</td><td>Anti-aircraft naval escort.</td><td>MedLong</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Corvette</td><td>Anti-submarine. Detects stealth.</td><td>Torpedo</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Missile Ship</td><td>Long-range naval missile platform.</td><td>Rocket</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Submarine</td><td>Stealth underwater attack.</td><td>Torpedo</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Sea Transport</td><td>Transports ground units across water.</td><td>&mdash;</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Cargo Ship</td><td>Resource transport by sea.</td><td>&mdash;</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Sea Mine Layer</td><td>Places sea mines.</td><td>&mdash;</td><td><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- AIRCRAFT -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #2a1a3a;">✈️</div>
+    <h2>Aircraft</h2>
+    <span class="count">4 units</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Unit</th><th>Role</th><th>Weapon</th><th>Tags</th><th>Frames</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Fighter</td><td>Air superiority. Can fire while moving.</td><td>Rocket</td><td><span class="tag tag-air">Air</span></td><td class="size-info">8 dir + shadow</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Bomber</td><td>Ground attack aircraft.</td><td>Rocket</td><td><span class="tag tag-air">Air</span></td><td class="size-info">8 dir + shadow</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">AWACS</td><td>Airborne radar. Extended scan range.</td><td>&mdash;</td><td><span class="tag tag-air">Air</span></td><td class="size-info">8 dir + shadow</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Air Transport</td><td>Airlifts ground units.</td><td>&mdash;</td><td><span class="tag tag-air">Air</span></td><td class="size-info">8 dir + shadow</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+
+  <div class="notes">
+    <strong>Note:</strong> Aircraft should have a <strong>drop shadow</strong> sprite rendered separately below them to convey altitude. The shadow should be offset ~8px down-right and semi-transparent.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- ALIEN UNITS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #3a1a1a;">👾</div>
+    <h2>Alien Units</h2>
+    <span class="count">4 units</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Unit</th><th>Role</th><th>Weapon</th><th>Tags</th><th>Frames</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Alien Assault</td><td>Alien ground attacker.</td><td>Big</td><td><span class="tag tag-alien">Alien</span><span class="tag tag-ground">Ground</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Alien Tank</td><td>Heavy alien ground unit.</td><td>Big</td><td><span class="tag tag-alien">Alien</span><span class="tag tag-ground">Ground</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Alien Plane</td><td>Alien aircraft.</td><td>Rocket</td><td><span class="tag tag-alien">Alien</span><span class="tag tag-air">Air</span></td><td class="size-info">8 dir + shadow</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Alien Ship</td><td>Alien naval vessel.</td><td>Big</td><td><span class="tag tag-alien">Alien</span><span class="tag tag-sea">Sea</span></td><td class="size-info">8 dir</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+
+  <div class="notes">
+    <strong>Note:</strong> Alien units should have a distinctly <strong>organic or otherworldly</strong> look compared to the mechanical human units. They are not player-coloured&mdash;they use a fixed alien colour scheme.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PRODUCTION BUILDINGS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #2a2a1a;">🏭</div>
+    <h2>Production Buildings</h2>
+    <span class="count">5 buildings</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Building</th><th>Role</th><th>Size</th><th>Tags</th><th>Animations</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Light Vehicle Plant</td><td>Produces scouts, engineers, transports.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Working anim</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Heavy Vehicle Plant</td><td>Produces tanks, assault guns, rockets.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Working anim</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Aircraft Factory</td><td>Produces all aircraft.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Working anim</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Ship Factory</td><td>Produces all naval vessels.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Working anim</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Alien Factory</td><td>Neutral alien production facility.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span><span class="tag tag-alien">Alien</span></td><td>&mdash;</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- RESOURCE BUILDINGS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #2a2a1a;">⛏️</div>
+    <h2>Resource &amp; Economy Buildings</h2>
+    <span class="count">7 buildings</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Building</th><th>Role</th><th>Size</th><th>Tags</th><th>Animations</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Mining Station</td><td>Mines metal, oil, gold from ground.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Working anim</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Small Generator</td><td>Provides power to nearby buildings.</td><td class="size-info">64&times;64</td><td><span class="tag tag-small">1&times;1</span></td><td>Power-on anim</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Power Station</td><td>Large power plant for the base.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Power-on anim</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Gold Refinery</td><td>Converts raw resources to gold/credits.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td>Power-on anim</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Metal Storage</td><td>Stores metal.</td><td class="size-info">64&times;64</td><td><span class="tag tag-small">1&times;1</span></td><td>&mdash;</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Oil Storage</td><td>Stores oil.</td><td class="size-info">64&times;64</td><td><span class="tag tag-small">1&times;1</span></td><td>&mdash;</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Gold Storage</td><td>Stores gold.</td><td class="size-info">64&times;64</td><td><span class="tag tag-small">1&times;1</span></td><td>&mdash;</td><td class="priority-med">MED</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- MILITARY BUILDINGS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #3a1a1a;">🔫</div>
+    <h2>Military &amp; Defence Buildings</h2>
+    <span class="count">7 buildings</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Building</th><th>Role</th><th>Size</th><th>Weapon</th><th>Animations</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Gun Turret</td><td>Standard base defence.</td><td class="size-info">64&times;64</td><td>Med</td><td>Rotating turret</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Anti-Aircraft Gun</td><td>Anti-air base defence.</td><td class="size-info">64&times;64</td><td>MedLong</td><td>Rotating</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Artillery</td><td>Long-range base defence.</td><td class="size-info">64&times;64</td><td>Big</td><td>Rotating</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Missile Launcher</td><td>Missile base defence.</td><td class="size-info">64&times;64</td><td>Rocket</td><td>Rotating</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Radar Station</td><td>Extends scan range.</td><td class="size-info">64&times;64</td><td>&mdash;</td><td>Rotating dish</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Land Mine</td><td>Hidden explosive. Destroys on contact.</td><td class="size-info">64&times;64</td><td>&mdash;</td><td>&mdash;</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Sea Mine</td><td>Underwater explosive.</td><td class="size-info">64&times;64</td><td>&mdash;</td><td>&mdash;</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- INFRASTRUCTURE BUILDINGS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #1a2a2a;">🏗️</div>
+    <h2>Infrastructure Buildings</h2>
+    <span class="count">5 buildings</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Building</th><th>Role</th><th>Size</th><th>Notes</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Connector</td><td>Links buildings to base power/resource network.</td><td class="size-info">64&times;64</td><td>Most-placed building. Needs directional variants (straight, corner, T, cross).</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Road</td><td>Speeds up ground unit movement.</td><td class="size-info">64&times;64</td><td>Auto-tile with directional connections.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Bridge</td><td>Allows ground units to cross water.</td><td class="size-info">64&times;64</td><td>Horizontal and vertical variants.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Platform</td><td>Foundation for building on water/coast.</td><td class="size-info">64&times;64</td><td>Base layer sprite.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Concrete Block</td><td>Defensive wall segment.</td><td class="size-info">64&times;64</td><td>&mdash;</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SUPPORT BUILDINGS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #1a3a2a;">🏢</div>
+    <h2>Support &amp; Specialist Buildings</h2>
+    <span class="count">11 buildings</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Building</th><th>Role</th><th>Size</th><th>Tags</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Depot</td><td>Stores/repairs ground vehicles.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Dock</td><td>Stores/repairs ships.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Hangar</td><td>Stores/repairs/rearms aircraft.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Barracks</td><td>Stores/trains infantry.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Habitat</td><td>Houses workers. Required for large bases.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Research Lab</td><td>Conducts research to upgrade units.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Training Facility</td><td>Trains infantry/commandos.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Landing Pad</td><td>Aircraft can land and refuel here.</td><td class="size-info">64&times;64</td><td><span class="tag tag-small">1&times;1</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Ecosphere</td><td>Environmental control. Generates score.</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Deep Mine</td><td>Deep resource extraction (unused in game).</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Shield Generator</td><td>Defensive shield (unused in game).</td><td class="size-info">128&times;128</td><td><span class="tag tag-big">2&times;2</span></td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- EFFECTS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #3a2a1a;">💥</div>
+    <h2>Visual Effects &amp; FX</h2>
+    <span class="count">14 effects</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Effect</th><th>Description</th><th>Type</th><th>Approx. Frames</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Muzzle Flash (Big)</td><td>Large weapon firing flash.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">4-6 frames</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Muzzle Flash (Medium)</td><td>Medium weapon firing flash.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">4-6 frames</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Muzzle Flash (Small)</td><td>Small weapon firing flash.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">4-6 frames</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Explosion (Small)</td><td>Small unit/building destruction.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">8-12 frames</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Explosion (Big)</td><td>Large unit/building destruction.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">12-16 frames</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Explosion (Air)</td><td>Aircraft destruction in sky.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">8-12 frames</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Explosion (Water)</td><td>Naval unit destruction splash.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">8-12 frames</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Hit Spark</td><td>Projectile impact on armour.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">3-5 frames</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Rocket Projectile</td><td>Rocket in flight trail.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">2-4 frames + trail</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Torpedo Projectile</td><td>Torpedo in water trail.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">2-4 frames</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Smoke</td><td>Light smoke from damaged units.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">6-8 frames, loop</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Dark Smoke</td><td>Heavy smoke from burning wrecks.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">~50 frames</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Absorb Effect</td><td>Shield/energy absorption visual.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">4-6 frames</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Vehicle Tracks</td><td>Tread marks left on ground by tanks.</td><td><span class="tag tag-fx">FX</span></td><td class="size-info">1 frame, 8 dir</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- UI ELEMENTS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #1a1a3a;">🖥️</div>
+    <h2>UI Elements</h2>
+    <span class="count">12 elements</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Element</th><th>Description</th><th>Notes</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Selection Ring</td><td>Highlight around selected unit.</td><td>Animated pulse. Colour matches player.</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Movement Path</td><td>Dotted line showing planned route.</td><td>Arrows or dots along path tiles.</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Attack Cursor</td><td>Crosshair when targeting enemies.</td><td>Red crosshair overlay.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Move Cursor</td><td>Cursor when selecting move destination.</td><td>Green arrow or footprint.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">HP Bar</td><td>Health bar above/below units.</td><td>Can be code-drawn or sprite-based.</td><td class="priority-high">HIGH</td></tr>
+      <tr><td class="sprite-name">Resource Icons</td><td>Metal, Oil, Gold icons for HUD.</td><td>16&times;16 or 24&times;24 icons.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Unit Build Icons</td><td>Thumbnails for each unit in build menus.</td><td>48&times;48 per unit type. One per unit.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Minimap Frame</td><td>Border/frame for the minimap overlay.</td><td>Decorative frame.</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Turn Banner</td><td>"Your Turn" / "Turn X" notification.</td><td>Animated slide-in banner.</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Button Styles</td><td>End Turn, Build, etc. button graphics.</td><td>Normal, hover, pressed states.</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Fog of War</td><td>Unexplored/hidden area overlay.</td><td>Semi-transparent black with soft edges.</td><td class="priority-med">MED</td></tr>
+      <tr><td class="sprite-name">Resource Overlay</td><td>Shows resource deposits on surveyed tiles.</td><td>Small icons (metal/oil/gold) per tile.</td><td class="priority-med">MED</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- MISCELLANEOUS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #2a2a2a;">📦</div>
+    <h2>Miscellaneous</h2>
+    <span class="count">3 items</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Asset</th><th>Description</th><th>Notes</th><th>Priority</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="sprite-name">Rubble (Small)</td><td>Destroyed small building debris.</td><td>64&times;64, placed when 1&times;1 building destroyed.</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Rubble (Large)</td><td>Destroyed large building debris.</td><td>128&times;128, placed when 2&times;2 building destroyed.</td><td class="priority-low">LOW</td></tr>
+      <tr><td class="sprite-name">Corpse</td><td>Dead infantry body.</td><td>64&times;64, placed when human unit dies.</td><td class="priority-low">LOW</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PRIORITY SUMMARY -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="category">
+  <div class="category-header">
+    <div class="icon" style="background: #3a3a1a;">📋</div>
+    <h2>Priority Summary &mdash; What to Create First</h2>
+  </div>
+
+  <div class="spec-box">
+    <h3>🔴 HIGH Priority (Start Here)</h3>
+    <ul>
+      <li><strong>4 terrain tiles</strong> (Ground, Water, Coast, Blocked) &mdash; the map is the backdrop for everything</li>
+      <li><strong>Constructor, Engineer, Surveyor, Tank</strong> &mdash; the 4 starting units every player gets</li>
+      <li><strong>Mining Station, Small Generator, Power Station</strong> &mdash; core economy buildings</li>
+      <li><strong>Connector</strong> &mdash; the most-placed building in every game</li>
+      <li><strong>Explosion (Small + Big), Hit Spark</strong> &mdash; combat feels lifeless without these</li>
+      <li><strong>Selection Ring, Movement Path, HP Bar</strong> &mdash; core UI feedback</li>
+    </ul>
+  </div>
+
+  <div class="spec-box">
+    <h3>🟡 MEDIUM Priority (Round Two)</h3>
+    <ul>
+      <li><strong>Remaining combat vehicles</strong>: Assault Gun, Scout, Mobile AA, Rocket Launcher, Missile Vehicle, Infantry</li>
+      <li><strong>Naval units</strong>: Gunboat, Escort, Corvette</li>
+      <li><strong>Aircraft</strong>: Fighter, Bomber</li>
+      <li><strong>Production buildings</strong>: Light/Heavy Vehicle Plants, Aircraft/Ship Factories</li>
+      <li><strong>Defence buildings</strong>: Gun Turret, AA Gun, Artillery, Missile Launcher</li>
+      <li><strong>Economy</strong>: Storage buildings, Gold Refinery, Road, Bridge, Platform</li>
+      <li><strong>Effects</strong>: Muzzle flashes, Rocket projectile, Smoke</li>
+      <li><strong>UI</strong>: Cursors, Resource icons, Fog of War, Resource overlay</li>
+    </ul>
+  </div>
+
+  <div class="spec-box">
+    <h3>🟢 LOW Priority (Polish)</h3>
+    <ul>
+      <li><strong>Specialist vehicles</strong>: Commando, APC, Mine Layer, Scanner, Repair, Bulldozer, Transports</li>
+      <li><strong>Remaining naval</strong>: Missile Ship, Submarine, Sea Transport, Cargo Ship, Sea Mine Layer</li>
+      <li><strong>Remaining air</strong>: AWACS, Air Transport</li>
+      <li><strong>All 4 alien units</strong></li>
+      <li><strong>Support buildings</strong>: Depot, Dock, Hangar, Barracks, Training, Landing Pad, etc.</li>
+      <li><strong>Effects</strong>: Dark Smoke, Torpedo, Absorb, Vehicle Tracks</li>
+      <li><strong>Misc</strong>: Rubble, Corpse, Minimap frame, Buttons</li>
+    </ul>
+  </div>
+</div>
+
+</div><!-- container -->
+
+<footer>
+  <p>MaXtreme Asset Guide &mdash; Generated for the MaXtreme-Godot project</p>
+  <p>Based on the original M.A.X.R. (Mechanized Assault &amp; eXploration Reloaded) unit data</p>
+</footer>
+
+</body>
+</html>
