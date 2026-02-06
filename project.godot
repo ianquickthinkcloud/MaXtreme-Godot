@@ -6,7 +6,7 @@
 
 config/name="MaXtreme"
 config/description="M.A.X.R. - Mechanized Assault & eXploration Reloaded - Rebuilt in Godot"
-run/main_scene="res://scenes/test/test_engine.tscn"
+run/main_scene="res://scenes/game/main_game.tscn"
 config/features=PackedStringArray("4.6")
 config/icon="res://icon.svg"
 
