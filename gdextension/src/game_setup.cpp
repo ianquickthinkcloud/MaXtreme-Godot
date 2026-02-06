@@ -21,6 +21,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <chrono>
 #include <fstream>
 
 using namespace godot;
@@ -160,6 +161,8 @@ std::shared_ptr<cUnitsData> GameSetup::create_test_units_data() {
         sd.setDefaultDescription(std::string("Mobile construction vehicle."));
         sd.canBuild = "big,small";
         sd.surfacePosition = eSurfacePosition::Ground;
+        sd.factorGround = 1.0f;
+        sd.factorCoast = 0.8f;
         sd.vehicleData.canBuildPath = false;
 
         cDynamicUnitData dd;
@@ -314,6 +317,8 @@ std::shared_ptr<cUnitsData> GameSetup::create_test_units_data() {
         sd.setDefaultName(std::string("Surveyor"));
         sd.setDefaultDescription(std::string("Resource surveying vehicle."));
         sd.surfacePosition = eSurfacePosition::Ground;
+        sd.factorGround = 1.0f;
+        sd.factorCoast = 0.8f;
         sd.vehicleData.canSurvey = true;
 
         cDynamicUnitData dd;
@@ -337,6 +342,8 @@ std::shared_ptr<cUnitsData> GameSetup::create_test_units_data() {
         sd.setDefaultName(std::string("Engineer"));
         sd.setDefaultDescription(std::string("Road and bridge builder."));
         sd.surfacePosition = eSurfacePosition::Ground;
+        sd.factorGround = 1.0f;
+        sd.factorCoast = 0.8f;
         sd.vehicleData.canBuildPath = true;
         sd.vehicleData.canClearArea = true;
 
@@ -614,6 +621,12 @@ Dictionary GameSetup::setup_custom_game(
             UtilityFunctions::print("[MaXtreme]   -> Player ", i, ": deployed at (",
                 landX, ",", landY, ") with 4 units (Constructor, 2x Tank, Surveyor)");
         }
+
+        // Seed the random generator before initializing game ID
+        // (Without seeding, both states are 0 and get() always returns 0 = infinite loop)
+        auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
+        uint64_t seed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count());
+        model.randomGenerator.seed(seed);
 
         // Initialize game ID
         model.initGameId();

@@ -7,7 +7,8 @@ const TILE_SIZE := 64
 const UNIT_RADIUS := 22.0
 const UNIT_OUTLINE := 2.0
 
-var engine: Node = null  # GameEngine reference
+var engine = null  # GameEngine reference
+var move_animator = null  # MoveAnimator reference (optional)
 var selected_unit_id := -1
 var _unit_positions: Dictionary = {}  # unit_id -> Vector2i
 var _unit_data: Array = []  # Array of dictionaries for drawing
@@ -25,9 +26,15 @@ var player_colors := [
 ]
 
 
-func setup(p_engine: Node) -> void:
+func setup(p_engine) -> void:
 	engine = p_engine
 	refresh_units()
+
+
+func _process(_delta: float) -> void:
+	# Continuously redraw during animations for smooth movement
+	if move_animator and move_animator.has_animations():
+		queue_redraw()
 
 
 func refresh_units() -> void:
@@ -37,54 +44,54 @@ func refresh_units() -> void:
 		queue_redraw()
 		return
 
-	var player_count := engine.get_player_count()
+	var player_count = engine.get_player_count()
 	for pi in range(player_count):
-		var color := player_colors[pi % player_colors.size()]
-		var player := engine.get_player(pi)
+		var color = player_colors[pi % player_colors.size()]
+		var player = engine.get_player(pi)
 		var player_color: Color = player.get_color() if player else color
 
 		# Vehicles
-		var vehicles := engine.get_player_vehicles(pi)
+		var vehicles = engine.get_player_vehicles(pi)
 		for v in vehicles:
-			var uid: int = v.get_id()
-			var pos: Vector2i = v.get_position()
-			var uname: String = v.get_name()
-			var hp: int = v.get_hp()
-			var hp_max: int = v.get_hp_max()
-			var is_tank := uname.contains("Tank")
+			var v_uid: int = v.get_id()
+			var v_pos: Vector2i = v.get_position()
+			var v_name: String = v.get_name()
+			var v_hp: int = v.get_hitpoints()
+			var v_hp_max: int = v.get_hitpoints_max()
+			var v_is_tank := v_name.contains("Tank")
 			_unit_data.append({
-				"id": uid,
-				"pos": pos,
-				"name": uname,
+				"id": v_uid,
+				"pos": v_pos,
+				"name": v_name,
 				"player": pi,
 				"color": player_color,
-				"hp": hp,
-				"hp_max": hp_max,
+				"hp": v_hp,
+				"hp_max": v_hp_max,
 				"is_vehicle": true,
-				"is_tank": is_tank,
+				"is_tank": v_is_tank,
 			})
-			_unit_positions[uid] = pos
+			_unit_positions[v_uid] = v_pos
 
 		# Buildings
-		var buildings := engine.get_player_buildings(pi)
+		var buildings = engine.get_player_buildings(pi)
 		for b in buildings:
-			var uid: int = b.get_id()
-			var pos: Vector2i = b.get_position()
-			var bname: String = b.get_name()
-			var hp: int = b.get_hp()
-			var hp_max: int = b.get_hp_max()
+			var b_uid: int = b.get_id()
+			var b_pos: Vector2i = b.get_position()
+			var b_name: String = b.get_name()
+			var b_hp: int = b.get_hitpoints()
+			var b_hp_max: int = b.get_hitpoints_max()
 			_unit_data.append({
-				"id": uid,
-				"pos": pos,
-				"name": bname,
+				"id": b_uid,
+				"pos": b_pos,
+				"name": b_name,
 				"player": pi,
 				"color": player_color,
-				"hp": hp,
-				"hp_max": hp_max,
+				"hp": b_hp,
+				"hp_max": b_hp_max,
 				"is_vehicle": false,
 				"is_tank": false,
 			})
-			_unit_positions[uid] = pos
+			_unit_positions[b_uid] = b_pos
 
 	queue_redraw()
 
@@ -105,15 +112,21 @@ func get_unit_position(unit_id: int) -> Vector2i:
 
 func _draw() -> void:
 	for ud in _unit_data:
+		var uid: int = ud["id"]
 		var center := Vector2(ud["pos"].x * TILE_SIZE + TILE_SIZE / 2.0,
 							  ud["pos"].y * TILE_SIZE + TILE_SIZE / 2.0)
-		var color: Color = ud["color"]
-		var is_selected := ud["id"] == selected_unit_id
+
+		# Override position with animation if active
+		if move_animator and move_animator.is_animating(uid):
+			center = move_animator.get_animated_position(uid)
+
+		var draw_color: Color = ud["color"]
+		var is_selected = (uid == selected_unit_id)
 
 		if ud["is_vehicle"]:
-			_draw_vehicle(center, color, ud, is_selected)
+			_draw_vehicle(center, draw_color, ud, is_selected)
 		else:
-			_draw_building(center, color, ud, is_selected)
+			_draw_building(center, draw_color, ud, is_selected)
 
 
 func _draw_vehicle(center: Vector2, color: Color, ud: Dictionary, is_selected: bool) -> void:
@@ -137,15 +150,11 @@ func _draw_vehicle(center: Vector2, color: Color, ud: Dictionary, is_selected: b
 	# HP bar
 	_draw_hp_bar(center, ud["hp"], ud["hp_max"], color)
 
-	# Unit initial letter
-	var letter := ud["name"].left(1)
-	# We can't easily draw text without a font in _draw, so skip for now
-
 
 func _draw_building(center: Vector2, color: Color, ud: Dictionary, is_selected: bool) -> void:
 	if is_selected:
-		var half := UNIT_RADIUS + 5
-		draw_rect(Rect2(center.x - half, center.y - half, half * 2, half * 2),
+		var sel_half := UNIT_RADIUS + 5
+		draw_rect(Rect2(center.x - sel_half, center.y - sel_half, sel_half * 2, sel_half * 2),
 				  Color(1, 1, 0, 0.4), false, 3.0)
 
 	# Buildings are diamonds
@@ -157,7 +166,8 @@ func _draw_building(center: Vector2, color: Color, ud: Dictionary, is_selected: 
 		center + Vector2(-r, 0),
 	])
 	draw_colored_polygon(points, color)
-	draw_polyline(points + PackedVector2Array([points[0]]), color.darkened(0.3), UNIT_OUTLINE)
+	var outline_points := PackedVector2Array([points[0], points[1], points[2], points[3], points[0]])
+	draw_polyline(outline_points, color.darkened(0.3), UNIT_OUTLINE)
 
 	_draw_hp_bar(center, ud["hp"], ud["hp_max"], color)
 

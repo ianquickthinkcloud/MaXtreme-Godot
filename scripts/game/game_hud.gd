@@ -38,11 +38,25 @@ func update_selected_unit(unit_data: Dictionary) -> void:
 
 	unit_panel.visible = true
 	unit_name_label.text = str(unit_data.get("name", "Unknown"))
-	unit_stats_label.text = "HP: %d/%d  |  Speed: %d/%d  |  Atk: %d  |  Armor: %d" % [
+
+	# Line 1: Defensive stats
+	var stats_line := "HP: %d/%d  |  Armor: %d  |  Speed: %d/%d" % [
 		unit_data.get("hp", 0), unit_data.get("hp_max", 0),
+		unit_data.get("armor", 0),
 		unit_data.get("speed", 0), unit_data.get("speed_max", 0),
-		unit_data.get("damage", 0), unit_data.get("armor", 0),
 	]
+
+	# Line 2: Offensive stats (only if unit has a weapon)
+	var damage = unit_data.get("damage", 0)
+	var attack_range = unit_data.get("range", 0)
+	if damage > 0:
+		stats_line += "\nAtk: %d  |  Range: %d  |  Shots: %d/%d  |  Ammo: %d/%d" % [
+			damage, attack_range,
+			unit_data.get("shots", 0), unit_data.get("shots_max", 0),
+			unit_data.get("ammo", 0), unit_data.get("ammo_max", 0),
+		]
+
+	unit_stats_label.text = stats_line
 	unit_pos_label.text = "Position: (%d, %d)  |  ID: %d" % [
 		unit_data.get("pos_x", 0), unit_data.get("pos_y", 0),
 		unit_data.get("id", 0),

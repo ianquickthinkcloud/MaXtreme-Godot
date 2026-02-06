@@ -19,6 +19,7 @@ class GamePlayer;
 class GameUnit;
 class GameActions;
 class GameSetup;
+class GamePathfinder;
 }
 
 namespace godot {
@@ -67,6 +68,9 @@ public:
 
     // --- Action system ---
     Ref<GameActions> get_actions() const;
+
+    // --- Pathfinding (Phase 7) ---
+    Ref<GamePathfinder> get_pathfinder() const;
 
     // --- Game initialization (Phase 4) ---
 

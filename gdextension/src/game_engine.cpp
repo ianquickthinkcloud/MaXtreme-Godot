@@ -4,6 +4,7 @@
 #include "game_unit.h"
 #include "game_actions.h"
 #include "game_setup.h"
+#include "game_pathfinder.h"
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -48,6 +49,9 @@ void GameEngine::_bind_methods() {
 
     // Action system
     ClassDB::bind_method(D_METHOD("get_actions"), &GameEngine::get_actions);
+
+    // Pathfinding (Phase 7)
+    ClassDB::bind_method(D_METHOD("get_pathfinder"), &GameEngine::get_pathfinder);
 
     // Game initialization (Phase 4)
     ClassDB::bind_method(D_METHOD("new_game_test"), &GameEngine::new_game_test);
@@ -244,6 +248,17 @@ Ref<GameActions> GameEngine::get_actions() const {
         actions->set_internal_model(model.get());
     }
     return actions;
+}
+
+// --- Pathfinding (Phase 7) ---
+
+Ref<GamePathfinder> GameEngine::get_pathfinder() const {
+    Ref<GamePathfinder> pf;
+    pf.instantiate();
+    if (model) {
+        pf->set_internal_model(model.get());
+    }
+    return pf;
 }
 
 // --- Game initialization (Phase 4) ---

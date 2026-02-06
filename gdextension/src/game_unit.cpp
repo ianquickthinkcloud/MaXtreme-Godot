@@ -37,6 +37,16 @@ void GameUnit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_ammo"), &GameUnit::get_ammo);
     ClassDB::bind_method(D_METHOD("get_ammo_max"), &GameUnit::get_ammo_max);
 
+    // Combat capability
+    ClassDB::bind_method(D_METHOD("get_can_attack"), &GameUnit::get_can_attack);
+    ClassDB::bind_method(D_METHOD("can_attack_air"), &GameUnit::can_attack_air);
+    ClassDB::bind_method(D_METHOD("can_attack_ground"), &GameUnit::can_attack_ground);
+    ClassDB::bind_method(D_METHOD("can_attack_sea"), &GameUnit::can_attack_sea);
+    ClassDB::bind_method(D_METHOD("has_weapon"), &GameUnit::has_weapon);
+    ClassDB::bind_method(D_METHOD("get_muzzle_type"), &GameUnit::get_muzzle_type);
+    ClassDB::bind_method(D_METHOD("calc_damage_to", "target_armor"), &GameUnit::calc_damage_to);
+    ClassDB::bind_method(D_METHOD("is_in_range_of", "target_pos"), &GameUnit::is_in_range_of);
+
     // State
     ClassDB::bind_method(D_METHOD("is_disabled"), &GameUnit::is_disabled);
     ClassDB::bind_method(D_METHOD("get_disabled_turns"), &GameUnit::get_disabled_turns);
@@ -165,6 +175,64 @@ int GameUnit::get_ammo_max() const {
     return unit->data.getAmmoMax();
 }
 
+// --- Combat capability ---
+
+int GameUnit::get_can_attack() const {
+    if (!unit) return 0;
+    return static_cast<int>(unit->getStaticUnitData().canAttack);
+}
+
+bool GameUnit::can_attack_air() const {
+    if (!unit) return false;
+    return (unit->getStaticUnitData().canAttack & 1) != 0; // eTerrainFlag::Air = 1
+}
+
+bool GameUnit::can_attack_ground() const {
+    if (!unit) return false;
+    return (unit->getStaticUnitData().canAttack & 4) != 0; // eTerrainFlag::Ground = 4
+}
+
+bool GameUnit::can_attack_sea() const {
+    if (!unit) return false;
+    return (unit->getStaticUnitData().canAttack & 2) != 0; // eTerrainFlag::Sea = 2
+}
+
+bool GameUnit::has_weapon() const {
+    if (!unit) return false;
+    return unit->getStaticUnitData().canAttack != 0;
+}
+
+String GameUnit::get_muzzle_type() const {
+    if (!unit) return String("None");
+    switch (unit->getStaticUnitData().muzzleType) {
+        case eMuzzleType::Big: return String("Big");
+        case eMuzzleType::Rocket: return String("Rocket");
+        case eMuzzleType::Small: return String("Small");
+        case eMuzzleType::Med: return String("Med");
+        case eMuzzleType::MedLong: return String("MedLong");
+        case eMuzzleType::RocketCluster: return String("RocketCluster");
+        case eMuzzleType::Torpedo: return String("Torpedo");
+        case eMuzzleType::Sniper: return String("Sniper");
+        default: return String("None");
+    }
+}
+
+int GameUnit::calc_damage_to(int target_armor) const {
+    if (!unit) return 0;
+    int dmg = unit->data.getDamage() - target_armor;
+    return std::max(1, dmg); // Minimum damage is always 1
+}
+
+bool GameUnit::is_in_range_of(Vector2i target_pos) const {
+    if (!unit) return false;
+    int range = unit->data.getRange();
+    if (range <= 0) return false;
+    const auto& pos = unit->getPosition();
+    int dx = target_pos.x - pos.x();
+    int dy = target_pos.y - pos.y();
+    return (dx * dx + dy * dy) <= (range * range);
+}
+
 // --- State ---
 
 bool GameUnit::is_disabled() const {
@@ -241,9 +309,18 @@ Dictionary GameUnit::get_stats() const {
     stats["ammo"] = get_ammo();
     stats["ammo_max"] = get_ammo_max();
 
+    stats["can_attack"] = get_can_attack();
+    stats["has_weapon"] = has_weapon();
+    stats["can_attack_air"] = can_attack_air();
+    stats["can_attack_ground"] = can_attack_ground();
+    stats["can_attack_sea"] = can_attack_sea();
+    stats["muzzle_type"] = get_muzzle_type();
+
     stats["is_disabled"] = is_disabled();
     stats["is_sentry"] = is_sentry_active();
     stats["is_manual_fire"] = is_manual_fire();
+    stats["is_attacking"] = is_attacking();
+    stats["is_being_attacked"] = is_being_attacked();
     stats["stored_resources"] = get_stored_resources();
     stats["stored_units"] = get_stored_units_count();
     stats["owner_id"] = get_owner_id();

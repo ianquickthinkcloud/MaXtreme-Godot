@@ -11,13 +11,13 @@ const COLOR_COAST := Color(0.60, 0.55, 0.35)     # Sandy
 const COLOR_BLOCKED := Color(0.30, 0.28, 0.25)   # Rocky gray
 const COLOR_GRID := Color(0.0, 0.0, 0.0, 0.08)   # Subtle grid lines
 
-var game_map: RefCounted = null  # GameMap from engine
+var game_map = null  # GameMap from engine
 var map_width := 0
 var map_height := 0
 var _hover_tile := Vector2i(-1, -1)
 
 
-func setup(p_map: RefCounted) -> void:
+func setup(p_map) -> void:
 	game_map = p_map
 	if game_map:
 		map_width = game_map.get_width()

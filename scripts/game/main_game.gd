@@ -5,16 +5,22 @@ extends Node2D
 const TILE_SIZE := 64
 const TICKS_PER_FRAME := 1  # How many engine ticks to process per visual frame
 
-var engine: GameEngine
-var actions: RefCounted  # GameActions
-var map_renderer: Node2D
-var unit_renderer: Node2D
-var camera: Camera2D
-var hud: CanvasLayer
+var engine = null         # GameEngine (GDExtension)
+var actions = null        # GameActions (GDExtension)
+var pathfinder = null     # GamePathfinder (GDExtension)
+var map_renderer = null   # MapRenderer node
+var unit_renderer = null  # UnitRenderer node
+var overlay = null        # OverlayRenderer node
+var combat_fx = null      # CombatEffects node
+var camera = null         # Camera2D node
+var hud = null            # GameHUD node
+var move_animator = null  # MoveAnimator node
 
 var selected_unit_id := -1
 var current_player := 0  # Which player we're controlling (local player)
 var game_running := false
+var _last_hover_tile := Vector2i(-1, -1)
+var _awaiting_attack := false  # True while an attack animation is playing
 
 
 func _ready() -> void:
@@ -22,14 +28,26 @@ func _ready() -> void:
 	engine = $GameEngine
 	map_renderer = $MapRenderer
 	unit_renderer = $UnitRenderer
+	overlay = $OverlayRenderer
+	combat_fx = $CombatEffects
+	move_animator = $MoveAnimator
 	camera = $GameCamera
 	hud = $GameHUD
+
+	if engine == null:
+		push_error("[Game] GameEngine node not found! Is the GDExtension loaded?")
+		return
 
 	# Connect signals
 	engine.connect("turn_started", _on_turn_started)
 	engine.connect("turn_ended", _on_turn_ended)
 	engine.connect("player_finished_turn", _on_player_finished_turn)
 	hud.connect("end_turn_pressed", _on_end_turn_pressed)
+	move_animator.connect("animation_finished", _on_move_animation_finished)
+	combat_fx.connect("effect_sequence_finished", _on_attack_animation_finished)
+
+	# Give unit renderer access to the animator
+	unit_renderer.move_animator = move_animator
 
 	# Start a new test game
 	_start_game()
@@ -37,42 +55,44 @@ func _ready() -> void:
 
 func _start_game() -> void:
 	print("[Game] Starting new game...")
-	var result := engine.new_game_test()
+	var result = engine.new_game_test()
 
 	if not result.get("success", false):
-		print("[Game] FAILED to start game: ", result.get("error", "unknown"))
+		push_error("[Game] FAILED to start game: ", result.get("error", "unknown"))
 		return
 
 	game_running = true
 
 	# Set up map
-	var game_map := engine.get_map()
+	var game_map = engine.get_map()
 	map_renderer.setup(game_map)
 
-	# Get actions interface
+	# Get subsystems
 	actions = engine.get_actions()
+	pathfinder = engine.get_pathfinder()
 
 	# Set up units
 	unit_renderer.setup(engine)
 
 	# Center camera on Player 0's first unit
-	var p0_vehicles := engine.get_player_vehicles(0)
+	var p0_vehicles = engine.get_player_vehicles(0)
 	if p0_vehicles.size() > 0:
-		var first_pos: Vector2i = p0_vehicles[0].get_position()
+		var first_pos = p0_vehicles[0].get_position()
 		camera.center_on_tile(first_pos, TILE_SIZE)
+	else:
+		camera.position = Vector2(32 * TILE_SIZE, 32 * TILE_SIZE)
 
 	# Update HUD
 	_update_hud()
 
-	print("[Game] Game started! Turn ", engine.get_turn_number())
-	print("[Game] Map: ", game_map.get_width(), "x", game_map.get_height())
-	print("[Game] Controls:")
-	print("[Game]   Left-click:  Select unit / Move selected unit")
-	print("[Game]   Right-click: Deselect")
-	print("[Game]   WASD/Arrows: Pan camera")
-	print("[Game]   Mouse wheel: Zoom")
-	print("[Game]   Middle-drag: Pan camera")
-	print("[Game]   Edge scroll: Pan camera")
+	var map_w = game_map.get_width() if game_map else 0
+	var map_h = game_map.get_height() if game_map else 0
+	print("[Game] Ready! Turn ", engine.get_turn_number(), " | Map: ", map_w, "x", map_h, " | Units: ", result.get("units_total", 0))
+	print("[Game] Controls: Left-click=Select/Move/Attack, Right-click=Deselect, WASD=Pan, Scroll=Zoom")
+
+	# Auto-select the first vehicle so movement range is visible immediately
+	if p0_vehicles.size() > 0:
+		_select_unit(p0_vehicles[0].get_id())
 
 
 func _process(delta: float) -> void:
@@ -84,29 +104,69 @@ func _process(delta: float) -> void:
 		engine.advance_tick()
 
 	# Update hover tile
-	var mouse_world := get_global_mouse_position()
-	var hover_tile := map_renderer.world_to_tile(mouse_world)
+	var mouse_world = get_global_mouse_position()
+	var hover_tile = map_renderer.world_to_tile(mouse_world)
 	map_renderer.set_hover_tile(hover_tile)
 
 	# Update tile info in HUD
 	if map_renderer.is_valid_tile(hover_tile):
-		var terrain := _get_terrain_name(hover_tile)
-		hud.update_tile_info(hover_tile, terrain)
+		var terrain = _get_terrain_name(hover_tile)
+		var extra_info := ""
+		if selected_unit_id != -1:
+			if overlay.is_tile_reachable(hover_tile):
+				var tile_cost = overlay.get_tile_cost(hover_tile)
+				extra_info = "  (move cost: %d)" % tile_cost
+			elif overlay.is_enemy_at_tile(hover_tile):
+				extra_info = "  [ATTACK TARGET]"
+		hud.update_tile_info(hover_tile, terrain + extra_info)
+
+	# Update path/attack preview when hovering with a unit selected
+	if selected_unit_id != -1 and hover_tile != _last_hover_tile:
+		_last_hover_tile = hover_tile
+		_update_hover_preview(hover_tile)
 
 	# Periodically refresh unit positions (in case of movement)
-	# Only refresh every 10 frames for performance
 	if Engine.get_process_frames() % 10 == 0:
 		unit_renderer.refresh_units()
-		# Keep selection highlight
 		unit_renderer.selected_unit_id = selected_unit_id
+
+
+func _update_hover_preview(hover_tile: Vector2i) -> void:
+	## Update path preview or attack preview based on what's under the cursor
+	if not map_renderer.is_valid_tile(hover_tile):
+		overlay.clear_path_preview()
+		overlay.clear_attack_preview()
+		return
+
+	# Check if hovering over an attackable enemy
+	if overlay.is_enemy_at_tile(hover_tile):
+		overlay.clear_path_preview()
+		var enemy_info = overlay.get_enemy_at_tile(hover_tile)
+		if not enemy_info.is_empty() and pathfinder:
+			var preview = pathfinder.preview_attack(selected_unit_id, enemy_info["id"])
+			preview["target_pos"] = hover_tile
+			overlay.set_attack_preview(preview)
+		return
+
+	# Check if hovering over a reachable tile (movement)
+	overlay.clear_attack_preview()
+	if overlay.is_tile_reachable(hover_tile) and pathfinder:
+		var path = pathfinder.calculate_path(selected_unit_id, hover_tile)
+		overlay.set_path_preview(path)
+	else:
+		overlay.clear_path_preview()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not game_running:
 		return
 
+	# Block input during attack animations
+	if _awaiting_attack:
+		return
+
 	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
+		var mb = event as InputEventMouseButton
 		if mb.pressed:
 			if mb.button_index == MOUSE_BUTTON_LEFT:
 				_handle_left_click(mb.position)
@@ -117,14 +177,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _handle_left_click(screen_pos: Vector2) -> void:
-	var world_pos := get_global_mouse_position()
-	var tile := map_renderer.world_to_tile(world_pos)
+	var world_pos = get_global_mouse_position()
+	var tile = map_renderer.world_to_tile(world_pos)
 
 	if not map_renderer.is_valid_tile(tile):
 		return
 
 	# Check if we clicked on a unit
-	var clicked_unit := unit_renderer.get_unit_at_tile(tile)
+	var clicked_unit = unit_renderer.get_unit_at_tile(tile)
 
 	if selected_unit_id == -1:
 		# No unit selected - try to select one
@@ -136,9 +196,8 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 			# Clicked on the same unit - deselect
 			_deselect_unit()
 		elif clicked_unit != -1:
-			# Clicked on a different unit
-			# Check if it's our unit (select) or enemy (attack)
-			var our_vehicles := engine.get_player_vehicles(current_player)
+			# Clicked on a different unit - check if ours or enemy
+			var our_vehicles = engine.get_player_vehicles(current_player)
 			var is_ours := false
 			for v in our_vehicles:
 				if v.get_id() == clicked_unit:
@@ -147,11 +206,14 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 
 			if is_ours:
 				_select_unit(clicked_unit)
-			else:
-				# Attack! (try it)
+			elif overlay.is_enemy_at_tile(tile):
+				# Attack enemy unit (in range)
 				_try_attack(tile, clicked_unit)
+			else:
+				# Enemy unit but not in range - just select it for info
+				print("[Game] Enemy unit at ", tile, " is out of attack range")
 		else:
-			# Clicked on empty tile - move there
+			# Clicked on empty tile - move there using pathfinding
 			_try_move(tile)
 
 
@@ -164,6 +226,9 @@ func _select_unit(unit_id: int) -> void:
 	unit_renderer.selected_unit_id = unit_id
 	unit_renderer.queue_redraw()
 
+	# Calculate and show movement range + attack range
+	_update_overlays()
+
 	# Update HUD with unit info
 	_update_selected_unit_hud()
 	print("[Game] Selected unit: ", unit_id)
@@ -173,46 +238,106 @@ func _deselect_unit() -> void:
 	selected_unit_id = -1
 	unit_renderer.selected_unit_id = -1
 	unit_renderer.queue_redraw()
+	overlay.clear_all()
+	_last_hover_tile = Vector2i(-1, -1)
 	hud.clear_selected_unit()
 
 
-func _try_move(target_tile: Vector2i) -> void:
-	if selected_unit_id == -1:
+func _update_overlays() -> void:
+	## Update both movement range and attack range overlays
+	if selected_unit_id == -1 or not pathfinder:
+		overlay.clear_all()
 		return
 
-	# Build a simple path (just start and end for now)
-	var current_pos := unit_renderer.get_unit_position(selected_unit_id)
-	if current_pos == Vector2i(-1, -1):
-		return
+	# Movement range
+	var reachable = pathfinder.get_reachable_tiles(selected_unit_id)
+	overlay.set_reachable_tiles(reachable)
 
-	# Create path as PackedVector2Array
-	var path := PackedVector2Array()
-	# Simple straight-line path (the engine's pathfinder would be better,
-	# but for the prototype we just send start and destination)
-	path.append(Vector2(current_pos.x, current_pos.y))
-	path.append(Vector2(target_tile.x, target_tile.y))
-
-	var result := actions.move_unit(selected_unit_id, path)
-	if result:
-		print("[Game] Moving unit ", selected_unit_id, " to ", target_tile)
-		# Refresh units to show new position
-		unit_renderer.refresh_units()
-		unit_renderer.selected_unit_id = selected_unit_id
+	# Attack range (only for units with weapons)
+	var range_tiles = pathfinder.get_attack_range_tiles(selected_unit_id)
+	var enemies = pathfinder.get_enemies_in_range(selected_unit_id)
+	if not range_tiles.is_empty():
+		overlay.set_attack_range(range_tiles, enemies)
 	else:
-		print("[Game] Cannot move unit ", selected_unit_id, " to ", target_tile)
+		overlay.clear_attack_range()
+
+
+func _try_move(target_tile: Vector2i) -> void:
+	if selected_unit_id == -1 or not pathfinder:
+		return
+
+	# Don't move if already animating
+	if move_animator.is_animating(selected_unit_id):
+		return
+
+	# Use the real pathfinder to get a proper A* path
+	var path = pathfinder.calculate_path(selected_unit_id, target_tile)
+	if path.is_empty():
+		print("[Game] No path to ", target_tile)
+		return
+
+	# Check if the path cost is within movement range
+	var cost = pathfinder.get_path_cost(selected_unit_id, path)
+	var speed = pathfinder.get_movement_points(selected_unit_id)
+	if cost > speed:
+		print("[Game] Path too expensive: cost ", cost, " > speed ", speed)
+		return
+
+	var result = actions.move_unit(selected_unit_id, path)
+	if result:
+		print("[Game] Moving unit ", selected_unit_id, " to ", target_tile, " (cost: ", cost, "/", speed, ")")
+		# Start smooth visual animation along the path
+		move_animator.start_animation(selected_unit_id, path)
+		# Clear overlays during animation
+		overlay.clear_all()
+	else:
+		print("[Game] Move failed for unit ", selected_unit_id)
 
 
 func _try_attack(target_tile: Vector2i, target_unit_id: int) -> void:
-	if selected_unit_id == -1:
+	if selected_unit_id == -1 or not pathfinder:
 		return
 
-	var result := actions.attack(selected_unit_id, target_tile, target_unit_id)
+	# Get attack preview for the animation
+	var preview = pathfinder.preview_attack(selected_unit_id, target_unit_id)
+	var damage: int = preview.get("damage", 0)
+	var will_destroy: bool = preview.get("will_destroy", false)
+
+	# Get attacker info for muzzle type
+	var attacker_unit = _find_unit(selected_unit_id)
+	var muzzle_type := "Big"
+	var attacker_pos := Vector2i(0, 0)
+	if attacker_unit:
+		muzzle_type = attacker_unit.get_muzzle_type()
+		attacker_pos = attacker_unit.get_position()
+
+	# Execute the attack in the engine
+	var result = actions.attack(selected_unit_id, target_tile, target_unit_id)
 	if result:
-		print("[Game] Unit ", selected_unit_id, " attacking ", target_unit_id, " at ", target_tile)
-		unit_renderer.refresh_units()
-		unit_renderer.selected_unit_id = selected_unit_id
+		print("[Game] Unit ", selected_unit_id, " attacks ", target_unit_id, " at ", target_tile,
+			  " -> ", damage, " damage", " (DESTROY)" if will_destroy else "")
+
+		# Block further input during attack animation
+		_awaiting_attack = true
+
+		# Play combat effects
+		combat_fx.play_attack_sequence(attacker_pos, target_tile,
+			damage, will_destroy, muzzle_type,
+			selected_unit_id, target_unit_id)
+
+		# Clear attack preview
+		overlay.clear_attack_preview()
 	else:
 		print("[Game] Cannot attack from unit ", selected_unit_id)
+
+
+func _find_unit(unit_id: int):
+	## Find a unit by ID across all players. Returns GameUnit or null.
+	for pi in range(engine.get_player_count()):
+		var u = engine.get_unit_by_id(pi, unit_id)
+		if u and u.get_id() > 0:
+			return u
+	return null
 
 
 func _update_hud() -> void:
@@ -220,7 +345,7 @@ func _update_hud() -> void:
 	hud.update_turn_info(engine.get_turn_number(), engine.get_game_time(), engine.is_turn_active())
 
 	# Player info
-	var player := engine.get_player(current_player)
+	var player = engine.get_player(current_player)
 	if player:
 		hud.update_player_info(
 			player.get_name(),
@@ -238,24 +363,29 @@ func _update_selected_unit_hud() -> void:
 		hud.clear_selected_unit()
 		return
 
-	# Find the unit
-	var unit = null
-	for pi in range(engine.get_player_count()):
-		unit = engine.get_unit_by_id(pi, selected_unit_id)
-		if unit and unit.get_id() > 0:
-			break
+	var unit = _find_unit(selected_unit_id)
 
-	if unit and unit.get_id() > 0:
-		var pos: Vector2i = unit.get_position()
+	if unit:
+		var pos = unit.get_position()
+		var mp = 0
+		var mp_max = 0
+		if pathfinder:
+			mp = pathfinder.get_movement_points(selected_unit_id)
+			mp_max = pathfinder.get_movement_points_max(selected_unit_id)
 		hud.update_selected_unit({
 			"name": unit.get_name(),
 			"id": unit.get_id(),
-			"hp": unit.get_hp(),
-			"hp_max": unit.get_hp_max(),
-			"speed": unit.get_speed(),
-			"speed_max": unit.get_speed_max(),
+			"hp": unit.get_hitpoints(),
+			"hp_max": unit.get_hitpoints_max(),
+			"speed": mp,
+			"speed_max": mp_max,
 			"damage": unit.get_damage(),
 			"armor": unit.get_armor(),
+			"range": unit.get_range(),
+			"shots": unit.get_shots(),
+			"shots_max": unit.get_shots_max(),
+			"ammo": unit.get_ammo(),
+			"ammo_max": unit.get_ammo_max(),
 			"pos_x": pos.x,
 			"pos_y": pos.y,
 		})
@@ -264,7 +394,7 @@ func _update_selected_unit_hud() -> void:
 
 
 func _get_terrain_name(tile: Vector2i) -> String:
-	var game_map := engine.get_map()
+	var game_map = engine.get_map()
 	if not game_map:
 		return ""
 	if game_map.is_water(tile):
@@ -279,10 +409,43 @@ func _get_terrain_name(tile: Vector2i) -> String:
 
 # --- Signal handlers ---
 
-func _on_turn_started(turn: int) -> void:
-	print("[Game] === Turn ", turn, " started! ===")
+func _on_attack_animation_finished(attacker_id: int, target_id: int) -> void:
+	_awaiting_attack = false
+
+	# Refresh everything after attack
+	pathfinder = engine.get_pathfinder()
 	unit_renderer.refresh_units()
 	unit_renderer.selected_unit_id = selected_unit_id
+
+	# Update overlays and HUD
+	if selected_unit_id != -1:
+		_update_overlays()
+		_update_selected_unit_hud()
+	_update_hud()
+
+
+func _on_move_animation_finished(unit_id: int) -> void:
+	# Refresh units to show final engine positions
+	unit_renderer.refresh_units()
+	unit_renderer.selected_unit_id = selected_unit_id
+
+	# Re-fetch pathfinder since movement points changed
+	pathfinder = engine.get_pathfinder()
+
+	# If the animated unit is our selected unit, show updated range
+	if unit_id == selected_unit_id:
+		_update_overlays()
+		_update_selected_unit_hud()
+
+
+func _on_turn_started(turn: int) -> void:
+	print("[Game] === Turn ", turn, " started! ===")
+	# Re-fetch pathfinder since model state changed
+	pathfinder = engine.get_pathfinder()
+	unit_renderer.refresh_units()
+	unit_renderer.selected_unit_id = selected_unit_id
+	if selected_unit_id != -1:
+		_update_overlays()
 	_update_hud()
 
 
@@ -301,10 +464,9 @@ func _on_end_turn_pressed() -> void:
 		return
 
 	print("[Game] Ending turn for player ", current_player)
-	var result := engine.end_player_turn(current_player)
+	var result = engine.end_player_turn(current_player)
 	if result:
 		# In a 2-player test, also end AI's turn automatically
-		# (In future, AI would make its own decisions)
 		for i in range(engine.get_player_count()):
 			if i != current_player:
 				engine.end_player_turn(i)

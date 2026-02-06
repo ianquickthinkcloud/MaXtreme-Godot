@@ -1,10 +1,13 @@
-[gd_scene load_steps=6 format=3 uid="uid://main_game"]
+[gd_scene load_steps=9 format=3 uid="uid://main_game"]
 
 [ext_resource type="Script" path="res://scripts/game/main_game.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/game/map_renderer.gd" id="2"]
 [ext_resource type="Script" path="res://scripts/game/unit_renderer.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/game/game_camera.gd" id="4"]
 [ext_resource type="Script" path="res://scripts/game/game_hud.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/game/overlay_renderer.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/game/move_animator.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/game/combat_effects.gd" id="8"]
 
 [node name="MainGame" type="Node2D"]
 script = ExtResource("1")
@@ -12,8 +15,17 @@ script = ExtResource("1")
 [node name="MapRenderer" type="Node2D" parent="."]
 script = ExtResource("2")
 
+[node name="OverlayRenderer" type="Node2D" parent="."]
+script = ExtResource("6")
+
+[node name="MoveAnimator" type="Node" parent="."]
+script = ExtResource("7")
+
 [node name="UnitRenderer" type="Node2D" parent="."]
 script = ExtResource("3")
+
+[node name="CombatEffects" type="Node2D" parent="."]
+script = ExtResource("8")
 
 [node name="GameEngine" type="GameEngine" parent="."]
 

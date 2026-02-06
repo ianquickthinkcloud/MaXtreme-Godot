@@ -56,6 +56,16 @@ public:
     int get_ammo() const;
     int get_ammo_max() const;
 
+    // --- Combat capability (static data) ---
+    int get_can_attack() const;         // bitfield: Air=1, Sea=2, Ground=4, Coast=8
+    bool can_attack_air() const;
+    bool can_attack_ground() const;
+    bool can_attack_sea() const;
+    bool has_weapon() const;            // true if canAttack != 0
+    String get_muzzle_type() const;     // "Big", "Small", "Rocket", etc.
+    int calc_damage_to(int target_armor) const;  // Preview damage: max(1, damage - armor)
+    bool is_in_range_of(Vector2i target_pos) const;  // Range check
+
     // --- State ---
     bool is_disabled() const;
     int get_disabled_turns() const;
