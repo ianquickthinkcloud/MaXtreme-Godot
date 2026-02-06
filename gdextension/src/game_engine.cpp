@@ -15,6 +15,9 @@
 #include "game/data/units/unitdata.h"
 #include "game/data/units/vehicle.h"
 #include "game/data/units/building.h"
+#include "game/logic/turncounter.h"
+#include "game/logic/action/actionendturn.h"
+#include "game/logic/action/actionstartturn.h"
 #include "utility/log.h"
 
 using namespace godot;
@@ -50,6 +53,25 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("new_game_test"), &GameEngine::new_game_test);
     ClassDB::bind_method(D_METHOD("new_game", "player_names", "player_colors", "map_size", "start_credits"),
                          &GameEngine::new_game);
+
+    // Turn system & game loop (Phase 5)
+    ClassDB::bind_method(D_METHOD("advance_tick"), &GameEngine::advance_tick);
+    ClassDB::bind_method(D_METHOD("advance_ticks", "count"), &GameEngine::advance_ticks);
+    ClassDB::bind_method(D_METHOD("get_game_time"), &GameEngine::get_game_time);
+    ClassDB::bind_method(D_METHOD("end_player_turn", "player_id"), &GameEngine::end_player_turn);
+    ClassDB::bind_method(D_METHOD("start_player_turn", "player_id"), &GameEngine::start_player_turn);
+    ClassDB::bind_method(D_METHOD("is_turn_active"), &GameEngine::is_turn_active);
+    ClassDB::bind_method(D_METHOD("all_players_finished"), &GameEngine::all_players_finished);
+    ClassDB::bind_method(D_METHOD("get_turn_state"), &GameEngine::get_turn_state);
+    ClassDB::bind_method(D_METHOD("get_game_state"), &GameEngine::get_game_state);
+    ClassDB::bind_method(D_METHOD("process_game_tick"), &GameEngine::process_game_tick);
+
+    // Signals for turn system events
+    ADD_SIGNAL(MethodInfo("turn_ended"));
+    ADD_SIGNAL(MethodInfo("turn_started", PropertyInfo(Variant::INT, "turn_number")));
+    ADD_SIGNAL(MethodInfo("player_finished_turn", PropertyInfo(Variant::INT, "player_id")));
+    ADD_SIGNAL(MethodInfo("player_won", PropertyInfo(Variant::INT, "player_id")));
+    ADD_SIGNAL(MethodInfo("player_lost", PropertyInfo(Variant::INT, "player_id")));
 }
 
 GameEngine::GameEngine() {
@@ -227,12 +249,14 @@ Ref<GameActions> GameEngine::get_actions() const {
 // --- Game initialization (Phase 4) ---
 
 Dictionary GameEngine::new_game_test() {
-    if (!engine_initialized) {
-        initialize_engine();
-    }
-    // Reset model for new game
-    model = std::make_unique<cModel>();
-    return GameSetup::setup_test_game(*model);
+    // Delegate to new_game with default test parameters
+    Array names;
+    names.push_back(String("Player 1"));
+    names.push_back(String("Player 2"));
+    Array colors;
+    colors.push_back(Color(0.0f, 0.0f, 1.0f));
+    colors.push_back(Color(1.0f, 0.0f, 0.0f));
+    return new_game(names, colors, 64, 150);
 }
 
 Dictionary GameEngine::new_game(Array player_names, Array player_colors, int map_size, int start_credits) {
@@ -241,5 +265,199 @@ Dictionary GameEngine::new_game(Array player_names, Array player_colors, int map
     }
     // Reset model for new game
     model = std::make_unique<cModel>();
-    return GameSetup::setup_custom_game(*model, player_names, player_colors, map_size, start_credits);
+    auto result = GameSetup::setup_custom_game(*model, player_names, player_colors, map_size, start_credits);
+
+    // Connect model signals to Godot signals
+    if (result.has("success") && bool(result["success"]) && model) {
+        // Turn ended signal
+        model->turnEnded.connect([this]() {
+            call_deferred("emit_signal", "turn_ended");
+        });
+
+        // New turn started signal
+        model->newTurnStarted.connect([this](const sNewTurnReport&) {
+            auto tc = model->getTurnCounter();
+            int turn = tc ? tc->getTurn() : 0;
+            call_deferred("emit_signal", "turn_started", turn);
+        });
+
+        // Player finished turn signal
+        model->playerFinishedTurn.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_finished_turn", player.getId());
+        });
+
+        // Player won signal
+        model->playerHasWon.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_won", player.getId());
+        });
+
+        // Player lost signal
+        model->playerHasLost.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_lost", player.getId());
+        });
+    }
+
+    return result;
+}
+
+// --- Turn System & Game Loop (Phase 5) ---
+
+void GameEngine::advance_tick() {
+    if (!model) return;
+    model->advanceGameTime();
+}
+
+void GameEngine::advance_ticks(int count) {
+    if (!model) return;
+    for (int i = 0; i < count; i++) {
+        model->advanceGameTime();
+    }
+}
+
+int GameEngine::get_game_time() const {
+    if (!model) return 0;
+    return static_cast<int>(model->getGameTime());
+}
+
+bool GameEngine::end_player_turn(int player_id) {
+    if (!model) return false;
+
+    cPlayer* player = model->getPlayer(player_id);
+    if (!player) {
+        UtilityFunctions::push_warning("[MaXtreme] end_player_turn: player ", player_id, " not found");
+        return false;
+    }
+
+    if (player->isDefeated) {
+        UtilityFunctions::push_warning("[MaXtreme] end_player_turn: player ", player_id, " is defeated");
+        return false;
+    }
+
+    if (player->getHasFinishedTurn()) {
+        UtilityFunctions::push_warning("[MaXtreme] end_player_turn: player ", player_id, " already finished turn");
+        return false;
+    }
+
+    model->handlePlayerFinishedTurn(*player);
+    return true;
+}
+
+bool GameEngine::start_player_turn(int player_id) {
+    if (!model) return false;
+
+    cPlayer* player = model->getPlayer(player_id);
+    if (!player) {
+        UtilityFunctions::push_warning("[MaXtreme] start_player_turn: player ", player_id, " not found");
+        return false;
+    }
+
+    if (player->isDefeated) return false;
+
+    model->handlePlayerStartTurn(*player);
+    return true;
+}
+
+bool GameEngine::is_turn_active() const {
+    if (!model) return false;
+    // A turn is "active" when players are issuing commands.
+    // We detect this by checking that no turn-end processing is happening.
+    // The turn-end states transition through: TurnActive -> ExecuteRemainingMovements -> ExecuteTurnStart
+    // During TurnActive, players can issue commands.
+    // We approximate this by checking if all players have NOT finished their turn yet
+    // OR at least one player hasn't finished (in simultaneous mode).
+    const auto& players = model->getPlayerList();
+    bool anyActive = false;
+    for (const auto& p : players) {
+        if (!p->isDefeated && !p->getHasFinishedTurn()) {
+            anyActive = true;
+            break;
+        }
+    }
+    return anyActive;
+}
+
+bool GameEngine::all_players_finished() const {
+    if (!model) return false;
+    const auto& players = model->getPlayerList();
+    for (const auto& p : players) {
+        if (!p->isDefeated && !p->getHasFinishedTurn()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+String GameEngine::get_turn_state() const {
+    if (!model) return String("no_model");
+
+    // Check if all players finished (turn-end processing is happening or about to)
+    if (all_players_finished()) {
+        // Check if there are active move jobs (ExecuteRemainingMovements state)
+        // We can't directly access turnEndState, but we can infer from game state
+        return String("processing");
+    }
+    return String("active");
+}
+
+Dictionary GameEngine::get_game_state() const {
+    Dictionary state;
+    if (!model) {
+        state["valid"] = false;
+        return state;
+    }
+
+    state["valid"] = true;
+    state["game_time"] = get_game_time();
+    state["turn"] = get_turn_number();
+    state["turn_state"] = get_turn_state();
+    state["is_turn_active"] = is_turn_active();
+    state["all_finished"] = all_players_finished();
+    state["player_count"] = get_player_count();
+    state["game_id"] = static_cast<int>(model->getGameId());
+
+    // Per-player state
+    Array player_states;
+    const auto& players = model->getPlayerList();
+    for (const auto& p : players) {
+        Dictionary ps;
+        ps["id"] = p->getId();
+        ps["name"] = String(p->getName().c_str());
+        ps["credits"] = p->getCredits();
+        ps["defeated"] = p->isDefeated;
+        ps["finished_turn"] = p->getHasFinishedTurn();
+        ps["vehicles"] = static_cast<int>(p->getVehicles().size());
+        ps["buildings"] = static_cast<int>(p->getBuildings().size());
+        ps["score"] = p->getScore();
+        player_states.push_back(ps);
+    }
+    state["players"] = player_states;
+
+    return state;
+}
+
+Dictionary GameEngine::process_game_tick() {
+    Dictionary result;
+    if (!model) {
+        result["processed"] = false;
+        return result;
+    }
+
+    int prev_turn = get_turn_number();
+    int prev_time = get_game_time();
+    bool was_active = is_turn_active();
+
+    // Advance one tick
+    model->advanceGameTime();
+
+    int new_turn = get_turn_number();
+    int new_time = get_game_time();
+    bool now_active = is_turn_active();
+
+    result["processed"] = true;
+    result["game_time"] = new_time;
+    result["turn"] = new_turn;
+    result["turn_changed"] = (new_turn != prev_turn);
+    result["is_turn_active"] = now_active;
+
+    return result;
 }

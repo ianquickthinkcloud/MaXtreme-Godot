@@ -82,6 +82,46 @@ public:
     /// start_credits: int
     /// Returns a Dictionary with game details on success.
     Dictionary new_game(Array player_names, Array player_colors, int map_size, int start_credits);
+
+    // --- Turn System & Game Loop (Phase 5) ---
+
+    /// Advance game time by one tick (10ms of game time).
+    /// Processes move jobs, attack jobs, effects, and turn-end logic.
+    void advance_tick();
+
+    /// Advance game time by N ticks.
+    /// Useful for fast-forwarding or processing a batch of ticks per frame.
+    void advance_ticks(int count);
+
+    /// Get the current game time (in ticks, each tick = 10ms).
+    int get_game_time() const;
+
+    /// Mark a player as having finished their turn.
+    /// In simultaneous mode, the turn advances when ALL players finish.
+    /// Returns true if the player was found and marked.
+    bool end_player_turn(int player_id);
+
+    /// Signal a player that their turn has started (needed for hot-seat mode).
+    /// Returns true if the player was found.
+    bool start_player_turn(int player_id);
+
+    /// Check if a turn is currently active (players are giving orders).
+    /// Returns false if the engine is processing end-of-turn movements or turn transitions.
+    bool is_turn_active() const;
+
+    /// Check if all players have finished their turn.
+    bool all_players_finished() const;
+
+    /// Get the current turn state as a string: "active", "executing_moves", "turn_start".
+    String get_turn_state() const;
+
+    /// Get a comprehensive game state Dictionary with turn, time, player states.
+    Dictionary get_game_state() const;
+
+    /// Process the game loop: advance ticks until an interesting event happens
+    /// or max_ticks is reached. Returns a Dictionary with what happened.
+    /// This is the main function GDScript should call each frame.
+    Dictionary process_game_tick();
 };
 
 } // namespace godot

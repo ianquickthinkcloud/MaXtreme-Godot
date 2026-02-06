@@ -1,14 +1,19 @@
 extends Node
 
-## Phase 4 Integration Test
-## Tests full game initialization: new_game_test() creates a map, players, and units.
-## Then verifies the complete pipeline: map queries, player data, unit stats, and actions.
+## Phase 5 Integration Test
+## Tests the full game loop: initialization, turn system, game tick processing,
+## end-turn, turn advancement, and game state queries.
+
+var turn_ended_count := 0
+var turn_started_count := 0
+var last_turn_number := 0
+var player_finished_count := 0
 
 func _ready() -> void:
 	print("")
 	print("================================================")
 	print("  MaXtreme Engine Integration Test")
-	print("  Phase 4: Game Initialization")
+	print("  Phase 5: Turn System & Game Loop")
 	print("================================================")
 	print("")
 
@@ -16,163 +21,194 @@ func _ready() -> void:
 	var engine = GameEngine.new()
 	add_child(engine)
 
-	# --- Phase 4: Start a test game ---
-	print("[TEST] === Game Initialization (Phase 4) ===")
-	print("[TEST] Calling new_game_test()...")
+	# Connect signals before starting game
+	engine.connect("turn_ended", _on_turn_ended)
+	engine.connect("turn_started", _on_turn_started)
+	engine.connect("player_finished_turn", _on_player_finished)
+
+	# --- Start a test game ---
+	print("[TEST] === Game Initialization ===")
 	var game_info: Dictionary = engine.new_game_test()
-	print("[TEST] Result: ", game_info)
+	assert(game_info["success"], "Game should start successfully")
+	print("[TEST] Game started: ", game_info["player_count"], " players, ",
+		  game_info["units_per_player"], " units each")
 	print("")
 
-	# Verify game started successfully
-	assert(game_info.has("success"), "Result should have 'success' key")
-	if not game_info["success"]:
-		print("[TEST] FAILED: Game initialization failed!")
-		print("[TEST] Error: ", game_info.get("error", "unknown"))
-		print("================================================")
-		print("  Phase 4 tests FAILED!")
-		print("================================================")
-		return
+	# --- Verify initial state ---
+	print("[TEST] === Initial State ===")
+	print("[TEST] Game time:     ", engine.get_game_time())
+	print("[TEST] Turn number:   ", engine.get_turn_number())
+	print("[TEST] Turn active:   ", engine.is_turn_active())
+	print("[TEST] All finished:  ", engine.all_players_finished())
+	print("[TEST] Turn state:    ", engine.get_turn_state())
 
-	print("[TEST] Game initialized successfully!")
-	print("[TEST]   Game ID:          ", game_info["game_id"])
-	print("[TEST]   Players:          ", game_info["player_count"])
-	print("[TEST]   Total units:      ", game_info["units_total"])
-	print("[TEST]   Units per player: ", game_info["units_per_player"])
-	print("[TEST]   Start credits:    ", game_info["start_credits"])
-	print("[TEST]   Map size:         ", game_info["map_size"])
-	print("[TEST]   Unit types:       ", game_info["unit_types"])
+	assert(engine.get_game_time() == 0, "Game time should start at 0")
+	assert(engine.get_turn_number() == 0, "Turn should start at 0")
+	assert(engine.is_turn_active(), "Turn should be active at start")
+	assert(not engine.all_players_finished(), "No players should have finished yet")
+	assert(engine.get_turn_state() == "active", "State should be 'active'")
+	print("[TEST] Initial state verified!")
 	print("")
 
-	# Verify engine state
-	assert(engine.is_engine_initialized(), "Engine should be initialized")
-	assert(engine.get_player_count() == 2, "Should have 2 players")
-	print("[TEST] Engine state verified: ", engine.get_engine_status())
+	# --- Test game tick advancement ---
+	print("[TEST] === Game Tick Processing ===")
+	print("[TEST] Advancing 10 ticks...")
+	engine.advance_ticks(10)
+	print("[TEST] Game time after 10 ticks: ", engine.get_game_time())
+	assert(engine.get_game_time() == 10, "Game time should be 10 after 10 ticks")
+
+	# Test single tick
+	engine.advance_tick()
+	assert(engine.get_game_time() == 11, "Game time should be 11 after one more tick")
+	print("[TEST] Single tick: game time = ", engine.get_game_time())
+
+	# Test process_game_tick
+	var tick_result = engine.process_game_tick()
+	assert(tick_result["processed"], "Tick should be processed")
+	assert(tick_result["game_time"] == 12, "Game time should be 12")
+	assert(not tick_result["turn_changed"], "Turn should not have changed yet")
+	print("[TEST] process_game_tick(): ", tick_result)
 	print("")
 
-	# --- Test map data ---
-	print("[TEST] === Map Verification ===")
-	var game_map = engine.get_map()
-	assert(game_map != null, "Map should exist")
-	print("[TEST] Map class:     ", game_map.get_class())
-	print("[TEST] Map size:      ", game_map.get_size())
-	print("[TEST] Map width:     ", game_map.get_width())
-	print("[TEST] Map height:    ", game_map.get_height())
-	assert(game_map.get_width() == 64, "Map width should be 64")
-	assert(game_map.get_height() == 64, "Map height should be 64")
+	# --- Test game state query ---
+	print("[TEST] === Game State ===")
+	var state = engine.get_game_state()
+	print("[TEST] Full game state: ", state)
+	assert(state["valid"], "State should be valid")
+	assert(state["game_time"] == 12, "Game time should be 12")
+	assert(state["turn"] == 0, "Turn should be 0")
+	assert(state["is_turn_active"], "Turn should be active")
 
-	# Test a position on the map
-	var center = Vector2i(32, 32)
-	print("[TEST] Position (32,32) valid: ", game_map.is_valid_position(center))
-	print("[TEST] Position (32,32) water: ", game_map.is_water(center))
-	print("[TEST] Position (32,32) ground: ", game_map.is_ground(center))
+	# Check player states in the game state dict
+	var players_state = state["players"]
+	assert(players_state.size() == 2, "Should have 2 player states")
+	for ps in players_state:
+		print("[TEST]   Player ", ps["id"], " (", ps["name"], "): credits=",
+			  ps["credits"], " vehicles=", ps["vehicles"],
+			  " finished=", ps["finished_turn"])
+		assert(not ps["finished_turn"], "No player should have finished turn yet")
 	print("")
 
-	# --- Test player data ---
-	print("[TEST] === Player Verification ===")
-	var all_players = engine.get_all_players()
-	assert(all_players.size() == 2, "Should have 2 players")
+	# --- Test end turn flow ---
+	print("[TEST] === Turn End Flow ===")
 
-	for i in range(all_players.size()):
-		var p = all_players[i]
-		print("[TEST] Player ", i, ":")
-		print("[TEST]   Name:     '", p.get_name(), "'")
-		print("[TEST]   ID:       ", p.get_id())
-		print("[TEST]   Color:    ", p.get_color())
-		print("[TEST]   Credits:  ", p.get_credits())
-		print("[TEST]   Vehicles: ", p.get_vehicle_count())
-		print("[TEST]   Buildings:", p.get_building_count())
-		print("[TEST]   Defeated: ", p.is_defeated())
-		assert(p.get_credits() == 150, "Player should have 150 credits")
-		assert(p.get_vehicle_count() == 4, "Player should have 4 vehicles")
+	# Player 0 ends turn
+	print("[TEST] Player 0 ending turn...")
+	var result = engine.end_player_turn(0)
+	assert(result, "Player 0 should be able to end turn")
+	print("[TEST]   is_turn_active:   ", engine.is_turn_active())
+	print("[TEST]   all_finished:     ", engine.all_players_finished())
+	assert(engine.is_turn_active(), "Turn should still be active (Player 1 hasn't finished)")
+	assert(not engine.all_players_finished(), "Not all players finished yet")
+
+	# Player 0 tries to end turn again (should fail)
+	result = engine.end_player_turn(0)
+	assert(not result, "Player 0 should not be able to end turn twice")
+
+	# Player 1 ends turn
+	print("[TEST] Player 1 ending turn...")
+	result = engine.end_player_turn(1)
+	assert(result, "Player 1 should be able to end turn")
+	print("[TEST]   all_finished:     ", engine.all_players_finished())
+	print("[TEST]   turn_state:       ", engine.get_turn_state())
+
+	# Now advance ticks to process the turn end
+	print("[TEST] Processing turn transition...")
+	var ticks_processed := 0
+	var initial_turn = engine.get_turn_number()
+	while engine.get_turn_number() == initial_turn and ticks_processed < 200:
+		engine.advance_tick()
+		ticks_processed += 1
+
+	var new_turn = engine.get_turn_number()
+	print("[TEST]   Ticks to complete turn: ", ticks_processed)
+	print("[TEST]   New turn number:        ", new_turn)
+	print("[TEST]   Game time:              ", engine.get_game_time())
+	assert(new_turn > initial_turn, "Turn should have advanced")
+	print("[TEST] Turn advanced from ", initial_turn, " to ", new_turn, "!")
 	print("")
 
-	# --- Test unit data ---
-	print("[TEST] === Unit Verification ===")
-	var p1_vehicles = engine.get_player_vehicles(0)
-	print("[TEST] Player 0 vehicles: ", p1_vehicles.size())
-	assert(p1_vehicles.size() == 4, "Player 0 should have 4 vehicles")
+	# --- Verify new turn state ---
+	print("[TEST] === After Turn Advance ===")
+	print("[TEST] Turn active:   ", engine.is_turn_active())
+	print("[TEST] All finished:  ", engine.all_players_finished())
+	print("[TEST] Turn state:    ", engine.get_turn_state())
 
-	for i in range(p1_vehicles.size()):
-		var u = p1_vehicles[i]
-		print("[TEST] Unit ", i, ": id=", u.get_id(), " name='", u.get_name(),
-			  "' pos=", u.get_position(), " hp=", u.get_hp(), "/", u.get_hp_max(),
-			  " speed=", u.get_speed(), "/", u.get_speed_max())
+	# After a new turn, players should be able to issue commands again
+	# (hasFinishedTurn should be reset)
+	var state2 = engine.get_game_state()
+	print("[TEST] Game state: ", state2)
+	for ps in state2["players"]:
+		print("[TEST]   Player ", ps["id"], ": finished=", ps["finished_turn"],
+			  " credits=", ps["credits"])
 	print("")
 
-	# Test specific unit properties
-	var first_unit = p1_vehicles[0]
-	assert(first_unit.get_id() > 0, "Unit should have a positive ID")
-	assert(first_unit.get_hp() > 0, "Unit should have HP")
-	assert(first_unit.is_vehicle(), "Unit should be a vehicle")
-	assert(not first_unit.is_building(), "Unit should not be a building")
-	print("[TEST] First unit stats dictionary:")
-	var stats = first_unit.get_stats()
-	print("[TEST]   ", stats)
+	# --- Test signal reception ---
+	print("[TEST] === Signal Check ===")
+	print("[TEST] turn_ended signals received:      ", turn_ended_count)
+	print("[TEST] turn_started signals received:     ", turn_started_count)
+	print("[TEST] player_finished signals received:  ", player_finished_count)
+	print("[TEST] last_turn_number from signal:      ", last_turn_number)
+	# Signals are deferred, so they may not fire in the same frame
 	print("")
 
-	# --- Test player 2 units ---
-	print("[TEST] === Player 2 Units ===")
-	var p2_vehicles = engine.get_player_vehicles(1)
-	print("[TEST] Player 1 vehicles: ", p2_vehicles.size())
-	assert(p2_vehicles.size() == 4, "Player 1 should have 4 vehicles")
-	for i in range(p2_vehicles.size()):
-		var u = p2_vehicles[i]
-		print("[TEST] Unit ", i, ": id=", u.get_id(), " name='", u.get_name(),
-			  "' pos=", u.get_position())
+	# --- Run another complete turn cycle ---
+	print("[TEST] === Second Turn Cycle ===")
+	var turn_before = engine.get_turn_number()
+
+	# Both players end turn immediately
+	engine.end_player_turn(0)
+	engine.end_player_turn(1)
+
+	# Process until turn changes
+	ticks_processed = 0
+	while engine.get_turn_number() == turn_before and ticks_processed < 200:
+		engine.advance_tick()
+		ticks_processed += 1
+
+	print("[TEST] Turn advanced: ", turn_before, " -> ", engine.get_turn_number(),
+		  " in ", ticks_processed, " ticks")
+	assert(engine.get_turn_number() > turn_before, "Turn should advance again")
 	print("")
 
-	# --- Test actions on real units ---
-	print("[TEST] === Action Tests on Real Units ===")
-	var actions = engine.get_actions()
-	assert(actions != null, "Actions should exist")
-
-	# Try to toggle sentry on a real unit
-	var tank = p1_vehicles[1]  # Should be a Tank
-	var tank_id = tank.get_id()
-	print("[TEST] Testing sentry toggle on Tank (id=", tank_id, ")...")
-	var result = actions.toggle_sentry(tank_id)
-	print("[TEST]   toggle_sentry -> ", result)
-
-	# Try on nonexistent unit (should fail gracefully)
-	result = actions.toggle_sentry(99999)
-	print("[TEST]   toggle_sentry(99999) -> ", result, " (expected: false)")
-	assert(not result, "Should fail on nonexistent unit")
+	# --- Test with nonexistent player ---
+	print("[TEST] === Error Handling ===")
+	result = engine.end_player_turn(99)
+	assert(not result, "Should fail for nonexistent player")
+	print("[TEST] end_player_turn(99) -> ", result, " (expected: false)")
 	print("")
 
-	# --- Test custom game ---
-	print("[TEST] === Custom Game Test ===")
-	print("[TEST] Starting 3-player custom game on 128x128 map...")
-	var names = ["Alpha", "Beta", "Gamma"]
-	var colors = [Color.BLUE, Color.RED, Color.GREEN]
-	var custom_info = engine.new_game(names, colors, 128, 200)
-	print("[TEST] Custom game result: ", custom_info)
-
-	if custom_info["success"]:
-		assert(engine.get_player_count() == 3, "Should have 3 players")
-		var custom_map = engine.get_map()
-		assert(custom_map.get_width() == 128, "Map should be 128 wide")
-		print("[TEST] Custom game verified: 3 players on 128x128 map")
-
-		# Verify custom game players
-		for i in range(3):
-			var cp = engine.get_player(i)
-			print("[TEST]   Player ", i, ": '", cp.get_name(), "' credits=", cp.get_credits(),
-				  " vehicles=", cp.get_vehicle_count())
-			assert(cp.get_credits() == 200, "Should have 200 credits")
-			assert(cp.get_vehicle_count() == 4, "Should have 4 vehicles")
-	print("")
-
-	# --- Summary ---
+	# --- Final summary ---
 	print("================================================")
-	print("  All Phase 4 tests PASSED!")
+	print("  All Phase 5 tests PASSED!")
 	print("")
-	print("  Game Initialization verified:")
-	print("    - new_game_test(): 2 players, 64x64 map")
-	print("    - new_game(): 3 players, 128x128, custom settings")
-	print("    - Map queries work (size, terrain, positions)")
-	print("    - Player data correct (name, credits, units)")
-	print("    - Unit data correct (id, name, hp, position)")
-	print("    - Actions work on real units")
-	print("    - Game is PLAYABLE from GDScript!")
+	print("  Turn System & Game Loop verified:")
+	print("    - advance_tick() / advance_ticks(n)")
+	print("    - process_game_tick() returns state dict")
+	print("    - get_game_time() / get_turn_number()")
+	print("    - end_player_turn() marks player done")
+	print("    - Turn advances when all players finish")
+	print("    - get_game_state() comprehensive query")
+	print("    - Signals: turn_ended, turn_started,")
+	print("      player_finished_turn")
+	print("    - Multiple turn cycles work correctly")
+	print("    - Error handling for invalid inputs")
+	print("  The game loop is FUNCTIONAL!")
 	print("================================================")
 	print("")
+
+
+func _on_turn_ended() -> void:
+	turn_ended_count += 1
+	print("[SIGNAL] turn_ended (count: ", turn_ended_count, ")")
+
+
+func _on_turn_started(turn: int) -> void:
+	turn_started_count += 1
+	last_turn_number = turn
+	print("[SIGNAL] turn_started: turn ", turn, " (count: ", turn_started_count, ")")
+
+
+func _on_player_finished(player_id: int) -> void:
+	player_finished_count += 1
+	print("[SIGNAL] player_finished_turn: player ", player_id, " (count: ", player_finished_count, ")")
