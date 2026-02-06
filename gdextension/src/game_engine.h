@@ -18,6 +18,7 @@ class GameMap;
 class GamePlayer;
 class GameUnit;
 class GameActions;
+class GameSetup;
 }
 
 namespace godot {
@@ -66,6 +67,21 @@ public:
 
     // --- Action system ---
     Ref<GameActions> get_actions() const;
+
+    // --- Game initialization (Phase 4) ---
+
+    /// Start a quick test game: 64x64 map, 2 players, 150 credits each,
+    /// 4 starting units per player (Constructor, 2x Tank, Surveyor).
+    /// Returns a Dictionary with game details on success.
+    Dictionary new_game_test();
+
+    /// Start a custom game with specified parameters.
+    /// player_names: Array of String
+    /// player_colors: Array of Color
+    /// map_size: int (power of 2, e.g. 32, 64, 128)
+    /// start_credits: int
+    /// Returns a Dictionary with game details on success.
+    Dictionary new_game(Array player_names, Array player_colors, int map_size, int start_credits);
 };
 
 } // namespace godot

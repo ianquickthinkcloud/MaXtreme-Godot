@@ -3,6 +3,7 @@
 #include "game_player.h"
 #include "game_unit.h"
 #include "game_actions.h"
+#include "game_setup.h"
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -44,6 +45,11 @@ void GameEngine::_bind_methods() {
 
     // Action system
     ClassDB::bind_method(D_METHOD("get_actions"), &GameEngine::get_actions);
+
+    // Game initialization (Phase 4)
+    ClassDB::bind_method(D_METHOD("new_game_test"), &GameEngine::new_game_test);
+    ClassDB::bind_method(D_METHOD("new_game", "player_names", "player_colors", "map_size", "start_credits"),
+                         &GameEngine::new_game);
 }
 
 GameEngine::GameEngine() {
@@ -57,7 +63,7 @@ GameEngine::~GameEngine() {
 // --- Lifecycle ---
 
 String GameEngine::get_engine_version() const {
-    return String("MaXtreme Engine v0.2.0 (M.A.X.R. 0.2.17 core)");
+    return String("MaXtreme Engine v0.3.0 (M.A.X.R. 0.2.17 core)");
 }
 
 String GameEngine::get_engine_status() const {
@@ -216,4 +222,24 @@ Ref<GameActions> GameEngine::get_actions() const {
         actions->set_internal_model(model.get());
     }
     return actions;
+}
+
+// --- Game initialization (Phase 4) ---
+
+Dictionary GameEngine::new_game_test() {
+    if (!engine_initialized) {
+        initialize_engine();
+    }
+    // Reset model for new game
+    model = std::make_unique<cModel>();
+    return GameSetup::setup_test_game(*model);
+}
+
+Dictionary GameEngine::new_game(Array player_names, Array player_colors, int map_size, int start_credits) {
+    if (!engine_initialized) {
+        initialize_engine();
+    }
+    // Reset model for new game
+    model = std::make_unique<cModel>();
+    return GameSetup::setup_custom_game(*model, player_names, player_colors, map_size, start_credits);
 }
