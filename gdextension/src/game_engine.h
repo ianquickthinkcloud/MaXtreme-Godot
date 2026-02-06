@@ -17,6 +17,7 @@ namespace godot {
 class GameMap;
 class GamePlayer;
 class GameUnit;
+class GameActions;
 }
 
 namespace godot {
@@ -62,6 +63,9 @@ public:
     Ref<GameUnit> get_unit_by_id(int player_index, int unit_id) const;
     Array get_player_vehicles(int player_index) const;
     Array get_player_buildings(int player_index) const;
+
+    // --- Action system ---
+    Ref<GameActions> get_actions() const;
 };
 
 } // namespace godot

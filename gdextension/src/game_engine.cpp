@@ -2,6 +2,7 @@
 #include "game_map.h"
 #include "game_player.h"
 #include "game_unit.h"
+#include "game_actions.h"
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -40,6 +41,9 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_unit_by_id", "player_index", "unit_id"), &GameEngine::get_unit_by_id);
     ClassDB::bind_method(D_METHOD("get_player_vehicles", "player_index"), &GameEngine::get_player_vehicles);
     ClassDB::bind_method(D_METHOD("get_player_buildings", "player_index"), &GameEngine::get_player_buildings);
+
+    // Action system
+    ClassDB::bind_method(D_METHOD("get_actions"), &GameEngine::get_actions);
 }
 
 GameEngine::GameEngine() {
@@ -201,4 +205,15 @@ Array GameEngine::get_player_buildings(int player_index) const {
         result.push_back(gu);
     }
     return result;
+}
+
+// --- Action system ---
+
+Ref<GameActions> GameEngine::get_actions() const {
+    Ref<GameActions> actions;
+    actions.instantiate();
+    if (model) {
+        actions->set_internal_model(model.get());
+    }
+    return actions;
 }

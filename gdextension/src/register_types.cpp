@@ -4,6 +4,7 @@
 #include "game_map.h"
 #include "game_player.h"
 #include "game_unit.h"
+#include "game_actions.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
@@ -21,6 +22,7 @@ void initialize_maxtreme_module(ModuleInitializationLevel p_level) {
     ClassDB::register_class<GameMap>();
     ClassDB::register_class<GamePlayer>();
     ClassDB::register_class<GameUnit>();
+    ClassDB::register_class<GameActions>();
 }
 
 void uninitialize_maxtreme_module(ModuleInitializationLevel p_level) {
