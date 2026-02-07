@@ -1,0 +1,152 @@
+[gd_scene load_steps=2 format=3 uid="uid://dj2cq7p5ns6av"]
+
+[ext_resource type="Script" path="res://scripts/ui/choose_units.gd" id="1_script"]
+
+[node name="ChooseUnits" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.12, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TopBar" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBox/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Choose Your Units"
+theme_override_font_sizes/font_size = 24
+
+[node name="CreditsLabel" type="Label" parent="MarginContainer/VBox/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Credits: 150 / 150"
+theme_override_font_sizes/font_size = 20
+
+[node name="FreeUnitsLabel" type="Label" parent="MarginContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+theme_override_font_sizes/font_size = 14
+modulate = Color(0.6, 0.9, 0.6, 1)
+
+[node name="MainHBox" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 15
+
+[node name="LeftPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+
+[node name="AvailableLabel" type="Label" parent="MarginContainer/VBox/MainHBox/LeftPanel"]
+layout_mode = 2
+text = "Available Units"
+theme_override_font_sizes/font_size = 16
+
+[node name="UnitList" type="ItemList" parent="MarginContainer/VBox/MainHBox/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBox/MainHBox/LeftPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="AddButton" type="Button" parent="MarginContainer/VBox/MainHBox/LeftPanel/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(120, 36)
+text = "Add >>"
+
+[node name="CenterPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.8
+
+[node name="InfoLabel" type="Label" parent="MarginContainer/VBox/MainHBox/CenterPanel"]
+layout_mode = 2
+text = "Unit Details"
+theme_override_font_sizes/font_size = 16
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBox/MainHBox/CenterPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="UnitInfoPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainHBox/CenterPanel/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="RightPanel" type="VBoxContainer" parent="MarginContainer/VBox/MainHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+
+[node name="RosterLabel" type="Label" parent="MarginContainer/VBox/MainHBox/RightPanel"]
+layout_mode = 2
+text = "Your Roster"
+theme_override_font_sizes/font_size = 16
+
+[node name="RosterList" type="ItemList" parent="MarginContainer/VBox/MainHBox/RightPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="MarginContainer/VBox/MainHBox/RightPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="RemoveButton" type="Button" parent="MarginContainer/VBox/MainHBox/RightPanel/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(120, 36)
+text = "<< Remove"
+
+[node name="BottomBar" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBox/BottomBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Select units and add them to your roster."
+theme_override_font_sizes/font_size = 14
+
+[node name="DoneButton" type="Button" parent="MarginContainer/VBox/BottomBar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(200, 44)
+text = "Done"
+theme_override_font_sizes/font_size = 16

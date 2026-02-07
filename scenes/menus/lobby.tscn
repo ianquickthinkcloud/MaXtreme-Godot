@@ -1,0 +1,149 @@
+[gd_scene load_steps=2 format=3 uid="uid://lobby"]
+
+[ext_resource type="Script" path="res://scripts/ui/lobby.gd" id="1"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.07, 0.12, 1)
+
+[node name="MainVBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = 20.0
+offset_right = -30.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="MainVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Multiplayer Lobby"
+horizontal_alignment = 1
+
+[node name="Sep1" type="HSeparator" parent="MainVBox"]
+layout_mode = 2
+
+[node name="ContentHBox" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="LeftPanel" type="VBoxContainer" parent="MainVBox/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.2
+theme_override_constants/separation = 8
+
+[node name="PlayersLabel" type="Label" parent="MainVBox/ContentHBox/LeftPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Players"
+
+[node name="PlayerList" type="ItemList" parent="MainVBox/ContentHBox/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 150)
+allow_reselect = false
+
+[node name="MapLabel" type="Label" parent="MainVBox/ContentHBox/LeftPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Map"
+
+[node name="MapOption" type="OptionButton" parent="MainVBox/ContentHBox/LeftPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 36)
+
+[node name="MapDownloadProgress" type="ProgressBar" parent="MainVBox/ContentHBox/LeftPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(0, 24)
+value = 0.0
+
+[node name="RightPanel" type="VBoxContainer" parent="MainVBox/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+theme_override_constants/separation = 8
+
+[node name="ChatLabel" type="Label" parent="MainVBox/ContentHBox/RightPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Chat"
+
+[node name="ChatHistory" type="RichTextLabel" parent="MainVBox/ContentHBox/RightPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 150)
+bbcode_enabled = true
+scroll_following = true
+
+[node name="ChatInput" type="LineEdit" parent="MainVBox/ContentHBox/RightPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 36)
+placeholder_text = "Type a message..."
+
+[node name="Sep2" type="HSeparator" parent="MainVBox"]
+layout_mode = 2
+
+[node name="BottomHBox" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LeaveButton" type="Button" parent="MainVBox/BottomHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 18
+text = "LEAVE"
+
+[node name="Spacer" type="Control" parent="MainVBox/BottomHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ReadyButton" type="Button" parent="MainVBox/BottomHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(160, 44)
+theme_override_font_sizes/font_size = 18
+text = "READY"
+
+[node name="StartButton" type="Button" parent="MainVBox/BottomHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(200, 44)
+theme_override_font_sizes/font_size = 20
+text = "START GAME"
+
+[node name="StatusLabel" type="Label" parent="MainVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.65, 0.8, 1)
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 2

@@ -1,0 +1,88 @@
+[gd_scene load_steps=2 format=3 uid="uid://b6l4nmvk8rxew"]
+
+[ext_resource type="Script" path="res://scripts/ui/choose_landing.gd" id="1_script"]
+
+[node name="ChooseLanding" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.12, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choose Landing Position"
+theme_override_font_sizes/font_size = 24
+
+[node name="MapContainer" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 15
+
+[node name="MapDisplay" type="Control" parent="MarginContainer/VBox/MapContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(400, 400)
+
+[node name="SidePanel" type="VBoxContainer" parent="MarginContainer/VBox/MapContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(250, 0)
+
+[node name="PositionLabel" type="Label" parent="MarginContainer/VBox/MapContainer/SidePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Click on the map to select a landing position."
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 16
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBox/MapContainer/SidePanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ConfirmButton" type="Button" parent="MarginContainer/VBox/MapContainer/SidePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(200, 50)
+disabled = true
+text = "Confirm Position"
+theme_override_font_sizes/font_size = 16
+
+[node name="BottomBar" type="HBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBox/BottomBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Click on the map to choose where your units will deploy."
+theme_override_font_sizes/font_size = 14
