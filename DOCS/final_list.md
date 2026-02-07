@@ -1,0 +1,824 @@
+# MaXtreme — User-Journey Audit & Implementation Roadmap
+
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-07
+> **Audit method:** Top-down user-journey trace. Every screen and player action in
+> the original M.A.X.R. source code is walked through in sequence; the Godot
+> implementation is checked at each step.
+
+---
+
+## Audit Methodology
+
+The previous audit (v1) was **bottom-up** — it scanned C++ class names and checked
+whether GDExtension bindings existed. This approach finds individual methods but
+misses entire **workflows** (e.g. the multi-step unit purchasing / landing flow
+that spans several classes, screens, and data structures).
+
+This revision uses a **top-down user-journey** approach:
+
+1. **Trace every screen** a player sees from launch to game-over.
+2. **Trace every action** a player can take on their turn.
+3. **Cross-reference against language strings** (`Title~*`, `Comp~*`, `Option~*`)
+   — each string corresponds to a visible UI element.
+4. **Cross-reference against network messages** — each message type corresponds to
+   a player action or lobby event.
+5. **Cross-reference against the CHANGELOG** — each entry is a feature that shipped.
+
+Status indicators:
+
+| Tag | Meaning |
+|-----|---------|
+| **DONE** | Fully working in Godot |
+| **PARTIAL** | Some parts work, key functionality incomplete |
+| **MISSING** | Feature exists in C++ but has no GDScript UI or wiring |
+| **EXPOSED** | C++ method bound in GDExtension but never called from GDScript |
+| **STUB** | GDScript code exists but is empty / hardcoded / non-functional |
+| **N/A** | Not applicable to Godot remake (e.g. SDL-specific code) |
+
+---
+
+# PART A — USER JOURNEY AUDIT
+
+---
+
+## Journey 1: Main Menu → New Game → Pre-Game → Game Start
+
+> This traces the **complete flow** from launching the game to the first in-game
+> turn. The original game has **10 distinct steps** between clicking "New Game" and
+> playing. The current Godot build has **3**.
+
+### Screen 1.1 — Main Menu
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| New Game button | Yes | Yes | **DONE** |
+| Hot Seat button | `Title~HotSeat` | Yes | **DONE** |
+| Load Game button | `Title~Load` | Button exists, disabled | **STUB** |
+| Multiplayer Host button | Yes | Yes (via lobby) | **DONE** |
+| Multiplayer Join button | Yes | Yes (via lobby) | **DONE** |
+| Preferences / Options | `Title~Options` | — | **MISSING** |
+| Credits / About | `Title~Credits`, `data/ABOUT` | — | **MISSING** |
+| Show Intro button | CHANGELOG 0.2.11 | — | **MISSING** |
+| Quit button | Yes | Yes | **DONE** |
+
+### Screen 1.2 — Lobby / New Game Setup
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Map selection | `Title~Map` | Yes (dropdown) | **DONE** |
+| Map preview | Yes | Yes (minimap preview) | **DONE** |
+| Player name input | `Title~Player_Name` | Yes | **DONE** |
+| Player colour picker | `Title~Color` | Yes (dropdown) | **DONE** |
+| Player count (up to 8) | `Title~Players` | Yes | **DONE** |
+| Game type selection | `Title~Game_Type` (Simultaneous / Turn-Based / Hot Seat) | Yes (dropdown) | **DONE** |
+| Victory condition | Death / Turns / Points | Yes (dropdown + spinboxes) | **DONE** |
+| Starting credits | `Title~Credits_start` | Yes (spinbox) | **DONE** |
+| Bridgehead type | Mobile / Definite | Yes (dropdown) | **DONE** |
+| Alien tech toggle | `Title~Alien_Tech` | Yes (checkbox) | **DONE** |
+| Resource amounts (Metal/Oil/Gold) | `Title~Metal`, `Title~Oil`, `Title~Gold` | Yes (dropdowns) | **DONE** |
+| Resource density | `Title~Resource_Density` | Yes (dropdown) | **DONE** |
+| Turn time limit | `Title~Turn_limit` | Yes (spinbox) | **DONE** |
+| Turn-end deadline | `Title~Turn_end` | Yes (spinbox) | **DONE** |
+| Clan selection per player | `Title~Choose_Clan`, `Title~Clans` | Dropdown exists | **PARTIAL** — no clan stat descriptions |
+| Team assignment per player | `Title~Team` | — | **MISSING** |
+| Ready state per player | Lobby `MU_MSG_IDENTIFIKATION` | — (single-player only) | **N/A offline** |
+| Start Game button | `MU_MSG_ASK_TO_FINISH_LOBBY` | Yes | **DONE** |
+
+### Screen 1.3 — Choose Clan (detail screen)
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Clan list with descriptions | `Title~Choose_Clan` | — | **MISSING** |
+| Stat modifier table per clan | `cClanUnitStat` modifications (Damage, Range, Armor, HP, Scan, Speed, Build Cost) | — | **MISSING** |
+| Clan 7 special rules display | Extra engineers/constructors per credit tier | — | **MISSING** |
+
+### Screen 1.4 — Choose Units (Pre-Game Unit Purchasing)
+
+> **This is the screen the audit missed. It is fundamental to gameplay.**
+> Language strings: `Title~Choose_Units`
+> C++ flow: `computeInitialLandingUnits()` in `gamepreparation.cpp`
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Unit purchase screen | `Title~Choose_Units` | — | **MISSING** |
+| Available unit list with icons, names, costs | `getDynamicUnitData()` per clan | — | **MISSING** |
+| Add / remove units to landing roster | `sLandingUnit` vector | — | **MISSING** |
+| Credit budget display (spent / remaining) | `startCredits` minus unit costs | — | **MISSING** |
+| Cargo slider per unit | `sLandingUnit::cargo`, cost = `cargo / 5` | — | **MISSING** |
+| Free units for Definite bridgehead | Constructor + Engineer + Surveyor (auto-added) | — | **MISSING** |
+| No free units for Mobile bridgehead | Full budget, player buys everything | — | **MISSING** |
+| Pre-game upgrade purchasing tab | `sInitPlayerData::unitUpgrades` | — | **MISSING** |
+| Hot Seat: sequential per player with transition | Each player shops in turn | — | **MISSING** |
+| Multiplayer: simultaneous with server collection | `MU_MSG_START_GAME_PREPARATIONS` | — | **MISSING** |
+
+**What currently happens instead:** `game_setup.cpp` hardcodes 1 Constructor +
+2 Tanks + 1 Surveyor for every player, ignoring bridgehead type, clan, and
+credits. The player never sees this screen.
+
+### Screen 1.5 — Landing Position Selection
+
+> Language strings: `Title~BridgeHead`, `Comp~Landing_Select`, `Comp~Landing_Too_Close`, `Comp~Landing_Warning`
+> C++ classes: `cLandingPositionManager`, `enterLandingSelection()`, `selectLandingPosition()`
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Map view for position selection | Full terrain view | — | **MISSING** |
+| Click to choose landing position | `selectLandingPosition()` → `MU_MSG_LANDING_POSITION` | — | **MISSING** |
+| Validation: must be on land | `isValidLandingPosition()` | — | **MISSING** |
+| Warning: too close to another player | `Comp~Landing_Too_Close` | — | **MISSING** |
+| Deployment radius preview | Shows where units will land around the chosen point | — | **MISSING** |
+| Multiplayer: position exchange & validation | `cLandingPositionManager` orchestrates | — | **MISSING** |
+| Hot Seat: sequential with hidden screen | Players choose in turn | — | **MISSING** |
+
+**What currently happens instead:** `game_setup.cpp` calculates evenly-spaced
+positions along the horizontal center of the map. Players have no choice.
+
+### Screen 1.6 — Game Initialisation (ActionInitNewGame)
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Set player clan | `sInitPlayerData::clan` | — (hardcoded) | **STUB** |
+| Validate & set landing position | `cActionInitNewGame::execute()` | — (hardcoded) | **STUB** |
+| Apply unit upgrades (deduct credits) | `unitUpgrades` loop | — (skipped) | **MISSING** |
+| Place initial resources on map | `placeInitialResources()` | Called | **DONE** |
+| Place mining stations (Definite bridgehead) | `placeMiningStations()` | — | **MISSING** |
+| Add aliens if enabled | `addAliens()` | Called if `alien_enabled` | **DONE** |
+| Land purchased vehicles | `makeLanding()` with purchased units | — (hardcoded units) | **STUB** |
+| Transfer remaining credits to player | Credits minus unit costs | — (full credits given) | **STUB** |
+
+---
+
+## Journey 2: In-Game — Player Turn
+
+> Traces everything a player can see and do during their turn.
+
+### 2A — HUD & Information Displays
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Resource bar (Metal, Oil, Gold, Energy, Credits) | Top HUD | Yes (Metal/Oil/Gold/Credits) | **PARTIAL** — Energy missing |
+| Human resources (workers) display | `getHumanProd()`, `getHumanNeed()` | — | **MISSING** |
+| Turn counter | Turn number display | Yes | **DONE** |
+| Current player display | Player name + colour | Yes | **DONE** |
+| Turn timer / countdown | `cTurnTimeClock` | — | **MISSING** |
+| Minimap | Yes | Yes | **DONE** |
+| Minimap zoom toggle | `toggleMiniMapZoom` | — | **MISSING** |
+| Minimap attack-units-only filter | `miniMapAttackUnitsOnly` | — | **MISSING** |
+| Score display (Points victory) | `player.get_score()` | — (exposed, never called) | **EXPOSED** |
+| Eco-sphere count | `getNumEcoSpheres()` | — | **MISSING** |
+
+### 2B — Unit Selection & Information
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Click to select unit | Yes | Yes | **DONE** |
+| Selected unit info panel (basic stats) | Yes | Yes (name, HP, ammo, speed) | **PARTIAL** |
+| Full unit status screen | `Title~Unitinfo` — all stats, cargo, stored units | — | **MISSING** |
+| Unit experience / rank display | Greenhorn → Grand Master | — | **MISSING** |
+| "Dated" unit indicator | Unit stats behind current research level | — | **MISSING** |
+| Disabled unit indicator | `unit.is_disabled()`, `get_disabled_turns()` | — (exposed, never called) | **EXPOSED** |
+| Box-select multiple units | Shift+drag | — | **MISSING** |
+| Shift+click multi-select | Yes | — | **MISSING** |
+| Unit groups (Ctrl+1-9 assign, 1-9 recall) | Yes (CHANGELOG 0.2.7) | — | **MISSING** |
+| Click unit name to rename | `cActionChangeUnitName` | — (exposed, never called) | **EXPOSED** |
+
+### 2C — Movement
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Right-click to move | Yes | Yes | **DONE** |
+| Path calculation & preview | `cPathCalculator` | Path shown on click | **DONE** |
+| Path preview (Shift+hover) | Shift+Left-Mouse preview (CHANGELOG 0.2.11) | — | **MISSING** |
+| Move animation | Yes | Yes (`move_animator.gd`) | **DONE** |
+| Group movement | Multiple selected units move together | — | **MISSING** |
+| End-move actions (attack/load/enter after move) | `eEndMoveAction` | — | **MISSING** |
+| Auto-move (surveyors) | `cActionSetAutoMove`, `cSurveyorAi` | — (exposed, never called) | **EXPOSED** |
+| Resume interrupted move | `cActionResumeMove` | — | **MISSING** |
+| Vehicle tracks on terrain | `makeTracks` flag | — | **MISSING** |
+| Saved camera positions | F5-F8 recall, Alt+F5-F8 save (CHANGELOG 0.2.10) | — | **MISSING** |
+
+### 2D — Combat
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Click target to attack | Yes | Yes | **DONE** |
+| Attack animation & effects | Yes | Yes (`combat_effects.gd`) | **DONE** |
+| Attack range overlay | Yes | Yes (`overlay_renderer.gd`) | **DONE** |
+| Reaction fire (sentry auto-attack) | `provokeReactionFire()`, `doReactionFire()` | — | **MISSING** |
+| Sentry mode toggle | `cActionChangeSentry` | — (exposed, never called) | **EXPOSED** |
+| Manual fire mode toggle | `cActionChangeManualFire` | — (exposed, never called) | **EXPOSED** |
+| Drive-and-fire capability | `canDriveAndFire` flag | — | **MISSING** |
+| Mine detonation | Mine contact explosion | — | **MISSING** |
+
+### 2E — Construction & Building
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Build panel (select building) | `Title~Build_Factory`, `Title~Build_Vehicle` | Yes (`build_panel.gd`) | **DONE** |
+| Building placement preview | Yes | Yes | **DONE** |
+| Building construction animation | Yes | Basic | **PARTIAL** |
+| Resource cost display before placement | Shows cost | — | **MISSING** |
+| Build time estimate | Shows turns remaining | — | **MISSING** |
+| Cancel construction | Stop mid-build | — | **MISSING** |
+| Turbo build (speed multiplier) | `maxBuildFactor` | — | **MISSING** |
+| Road/bridge/platform building | `canBuildPath` | — | **MISSING** |
+| Bridge/platform rendering | `hasBridgeOrPlatform()` | — | **MISSING** |
+| 2x2 (big) building placement | `isBig` flag | — (exposed, never checked) | **EXPOSED** |
+| Connector buildings (base network) | `connectsToBase` | — | **MISSING** |
+
+### 2F — Production (Factory Management)
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Production panel | Yes | Yes (`production_panel.gd`) | **DONE** |
+| Build list editing | `cActionChangeBuildList` | Yes | **DONE** |
+| Production start/stop | `cActionStartWork` / `cActionStop` | Yes | **DONE** |
+| Production progress display | Yes | Yes | **DONE** |
+| Production complete notification | Event report | — | **MISSING** |
+| Production blocked notification | Insufficient materials | — | **MISSING** |
+
+### 2G — Research
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Research panel / labs menu | `Title~Labs` | — | **MISSING** |
+| 8 research areas (Attack, Shots, Range, Armor, HP, Speed, Scan, Cost) | `cResearch` | — (exposed, never called) | **EXPOSED** |
+| Allocate research centres to areas | `actions.change_research()` | — (exposed, never called) | **EXPOSED** |
+| Research level display per area | `player.get_research_levels()` | — (exposed, never called) | **EXPOSED** |
+| Progress / turns remaining | Research centre count × turns | — | **MISSING** |
+| Research complete notification | Report type | — | **MISSING** |
+
+### 2H — Upgrades
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Upgrades menu (gold purchases) | `Title~Upgrades_Menu` | — | **MISSING** |
+| Per-stat upgrades for unit types | `cActionBuyUpgrades` | — (exposed, never called) | **EXPOSED** |
+| Vehicle upgrade at depot | `cActionUpgradeVehicle` | — (exposed, never called) | **EXPOSED** |
+| Building upgrade | `cActionUpgradeBuilding` | — (exposed, never called) | **EXPOSED** |
+| "Upgrade All" buildings of same type | `upgrade_all` parameter | — | **MISSING** |
+| Upgrade cost display | Gold cost | — | **MISSING** |
+
+### 2I — Logistics (Load, Transfer, Repair)
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Load unit into transport | `cActionLoad` | — (exposed, never called) | **EXPOSED** |
+| Unload / activate unit | `cActionActivate` | — (exposed, never called) | **EXPOSED** |
+| Transport cargo view | `Title~Cargo` — list stored units | — | **MISSING** |
+| Resource capacity in transporter | CHANGELOG 0.2.11 | — | **MISSING** |
+| Resource transfer between units | `cActionTransfer` | — (exposed, never called) | **EXPOSED** |
+| Transfer dialog (slider, type) | Yes | — | **MISSING** |
+| Repair unit | `cActionRepairReload` | — (exposed, never called) | **EXPOSED** |
+| Reload ammo | `cActionRepairReload` (reload mode) | — (exposed, never called) | **EXPOSED** |
+
+### 2J — Mining & Resources
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Mining allocation menu | `Title~Mine` / "Allocation menu" | — | **MISSING** |
+| Metal/Oil/Gold sliders | `cActionResourceDistribution` | — (exposed, never called) | **EXPOSED** |
+| Survey for resources | `cVehicle::doSurvey()` | — | **MISSING** |
+| Resource overlay on map | Toggleable, colour-coded by type | — | **MISSING** |
+| Resource discovery notification | Surveyor finds deposit | — | **MISSING** |
+| Energy balance display | `getEnergyProd()` / `getEnergyNeed()` | — (partially exposed) | **MISSING** |
+| Energy shortage warning | Report type | — | **MISSING** |
+| Sub-base connectivity display | `cBase` / `cSubBase` | — | **MISSING** |
+
+### 2K — Special Unit Actions
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Infiltrator steal | `cActionStealDisable` (steal mode) | — (exposed, never called) | **EXPOSED** |
+| Infiltrator disable | `cActionStealDisable` (disable mode) | — (exposed, never called) | **EXPOSED** |
+| Mine laying | `cActionMinelayerStatus` | — (exposed, never called) | **EXPOSED** |
+| Mine clearing | `cActionMinelayerStatus` (clear mode) | — (exposed, never called) | **EXPOSED** |
+| Terrain / rubble clearing | `cActionClear` | — (exposed, never called) | **EXPOSED** |
+| Self-destruct building | `cActionSelfDestroy` | — (exposed, never called) | **EXPOSED** |
+| Rubble rendering after destruction | `cMapField::getRubble()` | — | **MISSING** |
+| Mine rendering (own visible, enemy hidden) | `cMapField::getMine()` | — | **MISSING** |
+
+### 2L — Overlays & Toggles
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Survey overlay | Toggle | — | **MISSING** |
+| Hits overlay | Toggle | — | **MISSING** |
+| Scan overlay | Toggle | — | **MISSING** |
+| Status overlay | Toggle | — | **MISSING** |
+| Ammo overlay | Toggle | — | **MISSING** |
+| Grid overlay | Toggle | — | **MISSING** |
+| Colour overlay | Toggle | — | **MISSING** |
+| Range overlay | Toggle (attack range circles) | Range shown on unit select | **PARTIAL** |
+| Fog of war overlay | Toggle | Fog is always on | **PARTIAL** |
+| Lock overlay | Toggle | — | **MISSING** |
+
+### 2M — End Turn
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| End Turn button | Yes | Yes | **DONE** |
+| Hot Seat turn transition | Screen + "Ready" button | Yes | **DONE** |
+| Turn-end deadline enforcement | `cTurnTimeDeadline` auto-ends | — | **MISSING** |
+| Turn time clock display | Countdown timer | — | **MISSING** |
+| New turn report | `sNewTurnReport` | — | **MISSING** |
+
+---
+
+## Journey 3: End-Game
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Victory detection (elimination) | `playerHasWon` signal | — | **MISSING** |
+| Victory detection (turn limit) | `victoryTurns` check | — | **MISSING** |
+| Victory detection (points) | `victoryPoints` check | — | **MISSING** |
+| Defeat detection | `playerHasLost` signal | — | **MISSING** |
+| Sudden death mode | `suddenDeathMode` signal | — | **MISSING** |
+| End-game statistics screen | `Title~GameOver`, `sGameOverStat` | — | **MISSING** |
+| Built units tally | `GameOver~BuiltUnits` | — | **MISSING** |
+| Built buildings tally | `GameOver~BuiltBuildings` | — | **MISSING** |
+| Lost units tally | `GameOver~LostUnits` | — | **MISSING** |
+| Lost buildings tally | `GameOver~LostBuildings` | — | **MISSING** |
+| Score history graph | `pointsHistory` | — | **MISSING** |
+| Return to main menu | Yes | — (no end-game flow) | **MISSING** |
+| Victory / defeat music | Context music switch | — | **MISSING** |
+
+---
+
+## Journey 4: Settings & Meta Features
+
+### 4A — Preferences / Options Screen
+
+> Language string: `Title~Options`
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Preferences screen | `Title~Options` | — | **MISSING** |
+| Animations on/off | Display setting | — | **MISSING** |
+| Shadows on/off | Display setting | — | **MISSING** |
+| Alpha effects on/off | Display setting | — | **MISSING** |
+| Damage effects on/off | Display setting | — | **MISSING** |
+| Vehicle tracks on/off | Display setting | — | **MISSING** |
+| 3D effects toggle | `Settings~3D` | — | **MISSING** |
+| Autosave toggle | Setting | — | **MISSING** |
+| Music volume | Audio setting | — (AudioManager exists) | **MISSING** UI |
+| SFX volume | Audio setting | — (AudioManager exists) | **MISSING** UI |
+| Voice volume | Audio setting | — | **MISSING** |
+| Scroll speed | Configurable | Hardcoded `PAN_SPEED := 600.0` | **MISSING** |
+| Language selection | Setting | — | **MISSING** |
+
+### 4B — Save / Load
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Save game dialog | In-game menu | — (never called) | **EXPOSED** |
+| Save slot list | `engine.get_save_game_list()` | — (never called) | **EXPOSED** |
+| Save slot metadata (date, turn, map, players) | `engine.get_save_game_info()` | — (never called) | **EXPOSED** |
+| Load game screen (main menu) | `Title~Load` | Button disabled | **STUB** |
+| Load game screen (in-game) | Quick load | — | **MISSING** |
+| Auto-save at turn boundaries | Configurable frequency | — | **MISSING** |
+| "Continue" last auto-save on main menu | Quick resume | — | **MISSING** |
+| Hot Seat save/load | Tagged with game type | — | **MISSING** |
+| Multiplayer save/load | Lobby `MU_MSG_SAVESLOTS` | — | **MISSING** |
+
+### 4C — Keyboard Shortcuts
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| RTS hotkeys (A=attack, S=stop, etc.) | Yes | — | **MISSING** |
+| Unit group hotkeys (Ctrl+1-9, 1-9) | CHANGELOG 0.2.7 | — | **MISSING** |
+| Saved camera positions (F5-F8 / Alt+F5-F8) | CHANGELOG 0.2.10 | — | **MISSING** |
+| Path preview (Shift+Left-Mouse) | CHANGELOG 0.2.11 | — | **MISSING** |
+| Screenshot (Alt+C) | `Comp~Screenshot_Done` | — | **MISSING** |
+
+### 4D — Notifications & Event Log
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| "Unit under attack" alert | `savedreport.h` — Attacked | — | **MISSING** |
+| "Unit destroyed" alert | Destroyed report | — | **MISSING** |
+| "Unit detected" alert | Detected report | — | **MISSING** |
+| "Unit disabled" alert | Disabled report | — | **MISSING** |
+| "Path interrupted" alert | PathInterrupted report | — | **MISSING** |
+| "Production complete" notification | Report type | — | **MISSING** |
+| "Research complete" notification | Report type | — | **MISSING** |
+| "Building disabled" notification | BuildingDisabled report | — | **MISSING** |
+| "Resource low" warning | ResourceLow report | — | **MISSING** |
+| "Resource insufficient" warning | ResourceInsufficient report | — | **MISSING** |
+| Scrollable event log | Turn-by-turn log | — | **MISSING** |
+| Click event to jump to location | Camera jump | — | **MISSING** |
+
+### 4E — Reports & Statistics (In-Game)
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Casualties report screen | `cCasualtiesTracker` | — | **MISSING** |
+| Player statistics panel | Built/lost vehicles/buildings | — (exposed, never called) | **EXPOSED** |
+| Unit list / army overview | Filterable list of all units | — | **MISSING** |
+| Unit filter: Air / Ground / Sea / Stationary | Filter buttons | — | **MISSING** |
+| Unit filter: Damaged / Fighting / Producing / Stealth | Filter buttons | — | **MISSING** |
+| Economy summary | Resource income/expenditure | — | **MISSING** |
+
+### 4F — Other Meta Features
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Credits / About screen | `data/ABOUT`, `Title~Credits` | — | **MISSING** |
+| Intro movie | MVE player (CHANGELOG 0.2.2) | — | **N/A** (no movie file) |
+| In-game chat | Chat panel | Yes (`chat_panel.gd`) | **DONE** |
+| Console / chat commands | `/help`, `/pause`, `/kick`, `/turnend`, `/mark`, debug cmds | — | **MISSING** |
+
+---
+
+## Journey 5: Multiplayer-Specific Features
+
+| Element | Original | Godot | Status |
+|---------|----------|-------|--------|
+| Host game (create server) | `cLobbyServer` | Yes (lobby scene) | **DONE** |
+| Join game (connect to server) | `cLobbyClient` | Yes (lobby scene) | **DONE** |
+| Lobby player list | `MU_MSG_PLAYERLIST` | Yes | **DONE** |
+| Lobby chat | `MU_MSG_CHAT` | Yes | **DONE** |
+| Lobby ready state | `MU_MSG_IDENTIFIKATION` | — | **MISSING** |
+| Map download from host | `cMapDownloadMessageHandler` | — (signal exists) | **PARTIAL** |
+| Map download progress bar | Progress display | — | **MISSING** |
+| Map checksum validation | CRC checking | — | **MISSING** |
+| Freeze mode display | `cFreezeModes` — Pause / WaitForClient / WaitForServer / WaitForTurnend | `network_status.gd` partial | **PARTIAL** |
+| Show which player we're waiting for | Freeze detail | — | **MISSING** |
+| Model re-synchronisation | `resyncClientModel()` | — | **MISSING** |
+| Desync detection | Checksum mismatch | — | **MISSING** |
+| Player disconnect handling | `connection_lost` signal | — (exposed) | **EXPOSED** |
+| Player reconnection | Rejoin flow (`WANT_REJOIN_GAME`) | — | **MISSING** |
+| AI takeover for disconnected player | — | — | **MISSING** |
+| Team assignment | `Title~Team` | — | **MISSING** |
+| Saved game slots in lobby | `MU_MSG_SAVESLOTS` | — | **MISSING** |
+
+---
+
+# PART B — FEATURE COUNT SUMMARY
+
+| Journey | Total items | DONE | PARTIAL | MISSING/EXPOSED/STUB |
+|---------|-------------|------|---------|----------------------|
+| 1. Menu → Game Start | 44 | 16 | 2 | **26** |
+| 2. In-Game Turn | 89 | 16 | 5 | **68** |
+| 3. End-Game | 12 | 0 | 0 | **12** |
+| 4. Settings & Meta | 42 | 1 | 0 | **41** |
+| 5. Multiplayer | 16 | 4 | 2 | **10** |
+| **TOTAL** | **203** | **37** | **9** | **157** |
+
+**The Godot build currently implements ~18% of the original game's features.**
+
+---
+
+# PART C — IMPLEMENTATION ROADMAP
+
+> Re-phased based on the user-journey audit. Phases now follow gameplay order:
+> you cannot play the game properly without the earlier phases, so they come first.
+
+## Phase 18: Pre-Game Setup Flow — **IMPLEMENTED**
+
+> Players now choose their starting units (spending credits) and landing positions
+> before the game starts. Hot Seat mode shows transition screens between players.
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 18.1 | Unit Purchase Screen (`Title~Choose_Units`) | **DONE** | Large |
+| 18.2 | Expose `get_purchasable_vehicles()` from C++ | **DONE** | Medium |
+| 18.3 | Expose `get_initial_landing_units()` from C++ | **DONE** | Medium |
+| 18.4 | Landing Position Selection screen | **DONE** | Large |
+| 18.5 | Expose `check_landing_position()` from C++ | **DONE** | Small |
+| 18.6 | Clan Detail Screen (`get_clan_details()` exposed) | **DONE** | Medium |
+| 18.7 | Pre-game Upgrade Purchasing tab | **MOVED → 21.7** | Medium |
+| 18.8 | Wire purchased units + landing position into game init | **DONE** | Medium |
+| 18.9 | Hot Seat: sequential shopping with transition screens | **DONE** | Medium |
+| 18.10 | Remove hardcoded starting units (fallback kept for dev/test) | **DONE** | Small |
+
+## Phase 19: Core Unit Actions — **IMPLEMENTED**
+
+> All core unit commands are now wired: sentry, manual fire, load/unload, repair/reload,
+> resource transfer, mine laying/clearing, infiltrator steal/disable, rubble clearing,
+> self-destruct, auto-survey, rename. Visual state badges show on the map.
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 19.1 | Sentry mode toggle + visual indicator (eye badge) | **DONE** | Small |
+| 19.2 | Manual fire mode toggle + visual indicator (crosshair badge) | **DONE** | Small |
+| 19.3 | Reaction fire system (engine auto-fires; visual animation polish pending) | **DONE** | Large |
+| 19.4 | Load unit into transport + cargo view panel | **DONE** | Medium |
+| 19.5 | Unload / activate stored unit (click-to-place) | **DONE** | Medium |
+| 19.6 | Repair & reload (click target after pressing button) | **DONE** | Medium |
+| 19.7 | Resource transfer dialog (slider + resource type picker) | **DONE** | Medium |
+| 19.8 | Infiltrator steal & disable (click target after pressing button) | **DONE** | Medium |
+| 19.9 | Mine laying / clearing (toggle buttons) | **DONE** | Medium |
+| 19.10 | Terrain / rubble clearing | **DONE** | Small |
+| 19.11 | Self-destruct building | **DONE** | Small |
+| 19.12 | Auto-move (surveyor AI) | **DONE** | Medium |
+| 19.13 | Unit rename (dialog popup) | **DONE** | Small |
+
+## Phase 20: In-Game Information & HUD — **HIGH PRIORITY**
+
+> Players need to see what's happening.
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 20.1 | Full unit status screen (`Title~Unitinfo`) | **MISSING** | Medium |
+| 20.2 | Energy balance in HUD resource bar | **MISSING** | Small |
+| 20.3 | Human resources in HUD | **MISSING** | Small |
+| 20.4 | Score display for Points victory | **EXPOSED** | Small |
+| 20.5 | Turn timer / countdown display | **MISSING** | Medium |
+| 20.6 | Turn-end deadline enforcement | **MISSING** | Medium |
+| 20.7 | Disabled unit indicator (visual + info) — pulsing red X overlay | **DONE** | Small |
+| 20.8 | Unit experience / rank display | **MISSING** | Small |
+| 20.9 | "Dated" unit indicator | **MISSING** | Small |
+| 20.10 | 2x2 (big) unit rendering & selection | **EXPOSED** | Medium |
+
+## Phase 21: Research & Upgrades — **HIGH PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 21.1 | Research panel (`Title~Labs`) — 8 areas, allocation, progress | **EXPOSED** | Large |
+| 21.2 | Gold upgrades menu (`Title~Upgrades_Menu`) | **EXPOSED** | Large |
+| 21.3 | Vehicle upgrade at depot | **EXPOSED** | Medium |
+| 21.4 | Building upgrade + "Upgrade All" | **EXPOSED** | Medium |
+| 21.5 | Research complete notification | **MISSING** | Small |
+| 21.6 | Upgrade cost display | **MISSING** | Small |
+| 21.7 | Pre-game upgrade purchasing (on Choose Units screen) | **MISSING** | Medium |
+
+**21.7 detail — Pre-game Upgrade Purchasing:**
+The original game (`sInitPlayerData::unitUpgrades`) allows players to spend gold
+buying stat upgrades for unit *types* (not individual units) during the pre-game
+Choose Units screen, before the game starts. These upgrades apply to all units of
+that type the player owns for the entire game.
+
+- **C++ data:** `sInitPlayerData::unitUpgrades` is a `vector<pair<sID, cUnitUpgrade>>`
+- **C++ binding already exposed:** `get_clan_details()` returns per-unit stat info;
+  `actions.buy_upgrades()` exists for in-game upgrades. The pre-game variant
+  needs the same UI but charges against `start_credits` instead of in-game gold.
+- **Where to add it:** As a tab or toggle on the existing `choose_units.gd` screen.
+  Show a second panel where players can spend remaining credits on per-stat upgrades
+  (Damage, Range, Armor, HP, Scan, Speed) for each unit type.
+- **Wire into game init:** Pass the upgrades array into the config as
+  `player_unit_upgrades` (Array per player of Dicts `{id_first, id_second, upgrade_type, value}`),
+  then apply them in `setup_custom_game_ex()` before placing units.
+- **Depends on:** Phase 18 (Choose Units screen — already done), Phase 21.2 (Upgrades menu
+  pattern — can share UI components).
+
+## Phase 22: Mining, Resources & Economy — **HIGH PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 22.1 | Mining allocation menu (`Title~Mine`) | **EXPOSED** | Medium |
+| 22.2 | Resource survey action (surveyor units) | **MISSING** | Medium |
+| 22.3 | Resource overlay on map (toggleable, colour-coded) | **MISSING** | Medium |
+| 22.4 | Resource discovery notification | **MISSING** | Small |
+| 22.5 | Energy shortage warning | **MISSING** | Small |
+| 22.6 | Sub-base connectivity display | **MISSING** | Large |
+
+## Phase 23: Notifications & Event Log — **MEDIUM PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 23.1 | "Unit under attack" alert with camera jump | **MISSING** | Medium |
+| 23.2 | "Unit destroyed" alert | **MISSING** | Small |
+| 23.3 | "Production complete" notification | **MISSING** | Small |
+| 23.4 | "Research complete" notification | **MISSING** | Small |
+| 23.5 | Resource warnings (low, insufficient) | **MISSING** | Small |
+| 23.6 | Scrollable event log with jump-to-location | **MISSING** | Medium |
+| 23.7 | New turn report summary | **MISSING** | Medium |
+
+## Phase 24: Save/Load System — **MEDIUM PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 24.1 | Save game dialog (slot list, name input) | **EXPOSED** | Medium |
+| 24.2 | Load game screen (main menu) | **STUB** | Medium |
+| 24.3 | Load game screen (in-game) | **MISSING** | Medium |
+| 24.4 | Auto-save at turn boundaries | **MISSING** | Medium |
+| 24.5 | "Continue" option on main menu | **MISSING** | Small |
+
+## Phase 25: Map Overlays & Toggles — **MEDIUM PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 25.1 | Survey overlay toggle | **MISSING** | Small |
+| 25.2 | Hits overlay toggle | **MISSING** | Small |
+| 25.3 | Scan overlay toggle | **MISSING** | Small |
+| 25.4 | Status overlay toggle | **MISSING** | Small |
+| 25.5 | Ammo overlay toggle | **MISSING** | Small |
+| 25.6 | Grid overlay toggle | **MISSING** | Small |
+| 25.7 | Colour overlay toggle | **MISSING** | Small |
+| 25.8 | Fog of war overlay toggle | **PARTIAL** | Small |
+| 25.9 | Lock overlay toggle | **MISSING** | Small |
+| 25.10 | Minimap zoom & attack-units-only filter | **MISSING** | Small |
+
+## Phase 26: Construction & Building Enhancements — **MEDIUM PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 26.1 | Resource cost display before placement | **MISSING** | Small |
+| 26.2 | Build time estimate display | **MISSING** | Small |
+| 26.3 | Cancel construction in progress | **MISSING** | Small |
+| 26.4 | Turbo build (speed multiplier) | **MISSING** | Medium |
+| 26.5 | Road / bridge / platform building | **MISSING** | Large |
+| 26.6 | Bridge / platform rendering | **MISSING** | Medium |
+| 26.7 | Connector buildings (base network visualisation) | **MISSING** | Medium |
+
+## Phase 27: End-Game — **MEDIUM PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 27.1 | Victory detection (all three types) | **MISSING** | Medium |
+| 27.2 | Defeat detection | **MISSING** | Medium |
+| 27.3 | Sudden death mode | **MISSING** | Small |
+| 27.4 | End-game statistics screen (`Title~GameOver`) | **MISSING** | Large |
+| 27.5 | Built / lost tallies | **MISSING** | Small |
+| 27.6 | Score history graph | **MISSING** | Medium |
+| 27.7 | Return to main menu flow | **MISSING** | Small |
+| 27.8 | Victory / defeat music | **MISSING** | Small |
+
+## Phase 28: Reports & Statistics — **LOW PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 28.1 | Casualties report screen | **MISSING** | Medium |
+| 28.2 | Player statistics panel | **EXPOSED** | Medium |
+| 28.3 | Unit list / army overview (filterable) | **MISSING** | Large |
+| 28.4 | Economy summary | **MISSING** | Medium |
+
+## Phase 29: Keyboard Shortcuts & UX — **LOW PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 29.1 | RTS hotkeys (A, S, G, etc.) | **MISSING** | Medium |
+| 29.2 | Unit group hotkeys (Ctrl+1-9, 1-9) | **MISSING** | Medium |
+| 29.3 | Box-select / shift-click multi-select | **MISSING** | Medium |
+| 29.4 | Saved camera positions (F5-F8 / Alt+F5-F8) | **MISSING** | Small |
+| 29.5 | Path preview (Shift+hover) | **MISSING** | Small |
+| 29.6 | Screenshot (Alt+C) | **MISSING** | Small |
+
+## Phase 30: Preferences & Settings — **LOW PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 30.1 | Preferences screen UI | **MISSING** | Medium |
+| 30.2 | Display settings (animations, shadows, effects, tracks) | **MISSING** | Medium |
+| 30.3 | Audio settings (music/SFX/voice volume) | **MISSING** UI | Medium |
+| 30.4 | Scroll speed configuration | **MISSING** | Small |
+| 30.5 | Autosave toggle | **MISSING** | Small |
+| 30.6 | Credits / About screen | **MISSING** | Small |
+
+## Phase 31: Advanced Unit Features — **LOW PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 31.1 | Plane system (flight height, landing platforms) | **MISSING** | Large |
+| 31.2 | Stealth & detection system | **MISSING** | Large |
+| 31.3 | Rubble system (rendering + clearing) | **MISSING** | Medium |
+| 31.4 | Mine rendering (own visible, enemy hidden) | **MISSING** | Medium |
+| 31.5 | Vehicle tracks on terrain | **MISSING** | Small |
+| 31.6 | Group movement / formation | **MISSING** | Large |
+| 31.7 | End-move actions (attack/load/enter after move) | **MISSING** | Medium |
+| 31.8 | Resume interrupted move | **MISSING** | Small |
+| 31.9 | Drive-and-fire capability | **MISSING** | Medium |
+
+## Phase 32: Multiplayer Enhancements — **LOW PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 32.1 | Team assignment in lobby | **MISSING** | Medium |
+| 32.2 | Lobby ready state display | **MISSING** | Small |
+| 32.3 | Map download progress bar | **MISSING** | Medium |
+| 32.4 | Map checksum validation | **MISSING** | Small |
+| 32.5 | Model re-synchronisation & desync detection | **MISSING** | Large |
+| 32.6 | Player disconnect handling + AI takeover | **EXPOSED** | Large |
+| 32.7 | Player reconnection | **MISSING** | Large |
+| 32.8 | Freeze/pause detail (which player, timeout) | **PARTIAL** | Medium |
+| 32.9 | Console / chat commands | **MISSING** | Medium |
+| 32.10 | Multiplayer save game slots in lobby | **MISSING** | Medium |
+
+## Phase 33: Audio & Polish — **LOW PRIORITY**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 33.1 | Verify all unit sounds (move, attack, build, die) | **PARTIAL** | Medium |
+| 33.2 | UI click sounds | **MISSING** | Small |
+| 33.3 | Alert sounds (under attack, unit lost) | **MISSING** | Small |
+| 33.4 | Music transitions (menu → game → victory/defeat) | **MISSING** | Medium |
+| 33.5 | Team colour mask recolouring system (magenta `#FF00FF`) | **PARTIAL** | Large |
+
+---
+
+# PART D — REFERENCE
+
+## Art Pipeline: Team / Player Colour Convention
+
+When creating or updating unit sprite assets, the following convention **must** be used
+so the engine can recolour units per-player at runtime.
+
+### Designated mask colour: **Magenta `#FF00FF` (R 255, G 0, B 255)**
+
+| Item | Detail |
+|------|--------|
+| **Mask colour (hex)** | `#FF00FF` |
+| **Mask colour (RGB)** | `(255, 0, 255)` |
+| **Tolerance** | Exact match only — no anti-aliasing on the mask edges; keep them pixel-crisp |
+| **Where to paint it** | Any area of a unit sprite that should adopt the owning player's colour (e.g. hull panels, insignia, flag, trim) |
+| **File format** | PNG-32 with transparency. The magenta mask pixels must be **fully opaque** (`A = 255`) |
+| **Shadow sprites** | Do **NOT** add mask colour to shadow (`shw*.png`) files |
+| **FX sprites** | Do **NOT** add mask colour to FX/explosion/muzzle sprites |
+
+### How it works at runtime
+
+The unit renderer (`unit_renderer.gd`) will:
+
+1. On first load of a sprite, scan for any pixel whose RGB matches `#FF00FF` exactly.
+2. If mask pixels are found, generate a per-player variant by replacing every mask pixel
+   with the player's team colour (using the same hue but preserving the pixel's
+   original luminance so shading detail is kept).
+3. Cache the recoloured texture so the replacement only happens once per player per sprite.
+
+If **no** mask pixels are detected the renderer falls back to the current whole-sprite
+tint system (`PLAYER_TINT_STRENGTH` modulation), so existing/legacy assets continue to
+work without modification.
+
+### Current player colours (defined in `unit_renderer.gd`)
+
+| Slot | Name | Hex |
+|------|------|-----|
+| 0 | Blue | `#3366FF` |
+| 1 | Red | `#FF3333` |
+| 2 | Green | `#33CC33` |
+| 3 | Yellow | `#FFCC00` |
+| 4 | Purple | `#CC33CC` |
+| 5 | Orange | `#FF8000` |
+| 6 | Cyan | `#00CCCC` |
+| 7 | Gray | `#999999` |
+
+---
+
+## Quick Reference: GDExtension Methods Exposed but Never Called
+
+These methods are already bound in C++ and ready to use — they just need GDScript UI:
+
+```
+# GameActions (game_actions.h)
+actions.toggle_sentry(unit_id)
+actions.toggle_manual_fire(unit_id)
+actions.load_unit(unit_id, transport_id)
+actions.activate_unit(transport_id, stored_unit_id)
+actions.repair_reload(supplier_id, target_id)
+actions.transfer_resources(from_id, to_id, type, amount)
+actions.steal_disable(infiltrator_id, target_id, steal_mode)
+actions.clear_area(unit_id)
+actions.self_destroy(building_id)
+actions.rename_unit(unit_id, new_name)
+actions.set_minelayer_status(unit_id, mode)
+actions.set_auto_move(unit_id, enabled)
+actions.change_research(player_id, allocations)
+actions.upgrade_vehicle(building_id, vehicle_id)
+actions.upgrade_building(building_id, upgrade_all)
+actions.set_resource_distribution(building_id, metal, oil, gold)
+
+# GameEngine (game_engine.h)
+engine.save_game(slot)
+engine.load_game(slot)
+engine.get_save_game_list()
+engine.get_save_game_info(slot)
+
+# GamePlayer (game_player.h)
+player.get_score()
+player.get_human_balance()
+player.get_research_levels()
+player.get_research_centers_per_area()
+player.get_built_vehicles_count()
+player.get_lost_vehicles_count()
+player.get_built_buildings_count()
+player.get_lost_buildings_count()
+
+# GameUnit (game_unit.h)
+unit.is_disabled()
+unit.get_disabled_turns()
+unit.is_sentry_active()
+unit.is_manual_fire()
+unit.get_stored_resources()
+unit.get_stored_units_count()
+unit.get_energy_production()
+unit.get_energy_need()
+unit.can_be_upgraded()
+```
+
+---
+
+## Hardcoded Values That Must Be Replaced
+
+| Location | What's hardcoded | Should be |
+|----------|------------------|-----------|
+| `game_setup.cpp:446-448` | Landing positions evenly spaced horizontally | Player-chosen positions |
+| `game_setup.cpp:457-469` | Starting units (1 Constructor + 2 Tanks + 1 Surveyor) | Player-purchased units |
+| `game_setup.cpp:312-320` | Game settings defaults (bridgehead, alien, game type, victory, resources) | UI-configured (partially fixed by `setup_custom_game_ex`) |
+| `main_game.gd:5` | `TILE_SIZE := 64` | From engine |
+| `main_game.gd:718` | `build_speed := 1` | From unit data |
+| `main_game.gd:835` | `engine.advance_ticks(10)` | Configurable tick count |
+| `move_animator.gd:10` | `MOVE_SPEED := 200.0` | From unit speed stat |
+| `game_camera.gd:4-8` | Zoom/pan/edge scroll constants | From preferences |
+| `new_game_setup.gd:41` | `DEFAULT_CREDITS := 150` | From engine defaults |
+| `new_game_setup.gd:370` | `default_enabled := 2` player count | From last-used setting |

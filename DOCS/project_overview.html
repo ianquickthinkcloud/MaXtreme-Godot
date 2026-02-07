@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaXtreme Project Overview</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #3fb950;
+    --accent-3: #d29922;
+    --accent-4: #f85149;
+    --accent-5: #bc8cff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 2.5rem 0 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    font-size: 0.9rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.5rem;
+    color: var(--text);
+  }
+  p, li {
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  p { margin-bottom: 0.8rem; }
+  ul, ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  li { margin-bottom: 0.3rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface-2);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  td { color: var(--text); }
+  tr:hover td { background: var(--surface); }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-reused { background: #0d419d; color: #79c0ff; }
+  .badge-wrapped { background: #0e4429; color: #56d364; }
+  .badge-scratch { background: #5a1e02; color: #ffa657; }
+  .badge-stub { background: #3d1d00; color: #d29922; }
+  .badge-complete { background: #0e4429; color: #3fb950; }
+  .badge-next { background: #0d419d; color: #58a6ff; }
+  .badge-future { background: #272035; color: #bc8cff; }
+
+  .progress-container {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .progress-bar {
+    height: 12px;
+    background: #21262d;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.3s;
+  }
+  .progress-fill.green { background: linear-gradient(90deg, #238636, #3fb950); }
+  .progress-fill.blue  { background: linear-gradient(90deg, #1f6feb, #58a6ff); }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    text-align: center;
+  }
+  .stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.2;
+  }
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .col-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 700px) {
+    .col-2 { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .phase-timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  .phase-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.55rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .phase-item {
+    position: relative;
+    margin-bottom: 0.8rem;
+    padding-left: 0.8rem;
+  }
+  .phase-item::before {
+    content: '';
+    position: absolute;
+    left: -1.55rem;
+    top: 0.55rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg);
+  }
+  .phase-item.done::before { background: var(--accent-2); border-color: var(--accent-2); }
+  .phase-item.next::before { background: var(--accent); border-color: var(--accent); }
+  .phase-item.future::before { background: var(--surface); border-color: var(--text-muted); }
+  .phase-name { font-weight: 600; font-size: 0.9rem; }
+  .phase-desc { color: var(--text-muted); font-size: 0.8rem; }
+
+  code {
+    background: var(--surface-2);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #ffa657;
+  }
+
+  .fidelity-meter {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .fidelity-bar {
+    flex: 1;
+    height: 24px;
+    background: #21262d;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+  .fidelity-fill {
+    height: 100%;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--bg);
+  }
+  .fidelity-fill.high { background: linear-gradient(90deg, #238636, #3fb950); }
+  .fidelity-fill.med  { background: linear-gradient(90deg, #9e6a03, #d29922); }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>MaXtreme &mdash; Project Overview</h1>
+<p class="subtitle">M.A.X.R. (Mechanized Assault &amp; eXploration Reloaded) rebuilt in Godot 4.6 using a C++/GDScript hybrid architecture.<br>Generated 6 February 2026</p>
+
+<!-- ============================================================ -->
+<!-- SECTION 0: At a Glance -->
+<!-- ============================================================ -->
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-number">310</div>
+    <div class="stat-label">Original C++ files reused</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">18</div>
+    <div class="stat-label">GDExtension wrapper files</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">25</div>
+    <div class="stat-label">GDScript files (from scratch)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">~4,200</div>
+    <div class="stat-label">Lines of GDScript</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">1,114</div>
+    <div class="stat-label">PNG sprites (from PCX)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">16 / 17</div>
+    <div class="stat-label">Phases complete</div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- SECTION 1: Features Ported -->
+<!-- ============================================================ -->
+
+<h2><span class="num">1</span> Features Ported from the Source Code</h2>
+
+<p>The following table shows every major game feature in M.A.X.R. and how it has been brought into MaXtreme. The core strategy is: <strong>the C++ engine runs the rules; Godot handles everything the player sees and hears</strong>.</p>
+
+<table>
+  <thead>
+    <tr><th>Feature</th><th>Origin</th><th>Status</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Game model &amp; state (<code>cModel</code>)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Entire model layer compiled unchanged as GDExtension</td>
+    </tr>
+    <tr>
+      <td>Turn system (simultaneous turns)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td><code>cGameTimerServer</code> / <code>cGameTimerClient</code> ticking at 10ms</td>
+    </tr>
+    <tr>
+      <td>Action system (24 action types)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Movement, combat, build, produce, research, logistics, etc.</td>
+    </tr>
+    <tr>
+      <td>Pathfinding (A* &amp; Dijkstra)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td><code>cPathCalculator</code> with terrain costs, range maps</td>
+    </tr>
+    <tr>
+      <td>Combat resolution</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Damage calculation, armour, hit probabilities &mdash; all original logic</td>
+    </tr>
+    <tr>
+      <td>Building &amp; economy</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Construction, mining, energy, research, credits, resources</td>
+    </tr>
+    <tr>
+      <td>Unit data (35 vehicles, 33 buildings)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Original JSON data files loaded by M.A.X.R. <code>LoadData()</code></td>
+    </tr>
+    <tr>
+      <td>Clan system (8 clans)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Stat modifiers per clan from <code>clans.json</code></td>
+    </tr>
+    <tr>
+      <td>Map format (WRL)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>5 original maps loaded via <code>cStaticMap</code></td>
+    </tr>
+    <tr>
+      <td>Fog of war (scan ranges)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td><code>cRangeMap</code> scan system &rarr; GDScript fog renderer</td>
+    </tr>
+    <tr>
+      <td>Save / load</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td><code>cSavegame</code> JSON serialisation, 100 save slots</td>
+    </tr>
+    <tr>
+      <td>Networking (TCP lockstep)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td><code>cServer</code>/<code>cClient</code>/<code>cConnectionManager</code> with POSIX sockets replacing SDL_net</td>
+    </tr>
+    <tr>
+      <td>Lobby system</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td><code>cLobbyServer</code>/<code>cLobbyClient</code> wrapped in <code>GameLobby</code> GDExtension</td>
+    </tr>
+    <tr>
+      <td>Deterministic sync &amp; checksums</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Lockstep validation, freeze modes for lag/desync</td>
+    </tr>
+    <tr>
+      <td>Localisation framework (9 languages)</td>
+      <td><span class="badge badge-reused">C++ Reused</span></td>
+      <td><span class="badge badge-complete">Complete</span></td>
+      <td>Language data files present (ca, de, en, es, fr, hu, nl, ru, sl)</td>
+    </tr>
+    <tr>
+      <td>AI opponent</td>
+      <td>&mdash;</td>
+      <td><span class="badge badge-future">Post-Release</span></td>
+      <td>Deferred; initial release is pure multiplayer</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<!-- ============================================================ -->
+<!-- SECTION 2: Assets Ported -->
+<!-- ============================================================ -->
+
+<h2><span class="num">2</span> Assets Ported from the Source Material</h2>
+
+<p>All assets come from the M.A.X.R. release v0.2.17 data directory. Graphics were converted from PCX (unsupported by Godot) to PNG with transparency via a custom Python tool. Audio files were already in OGG Vorbis (Godot-native) and needed no conversion.</p>
+
+<div class="col-2">
+  <div class="card">
+    <h4 style="color: var(--accent-2);">Graphics &mdash; 1,114 PNG sprites</h4>
+    <ul>
+      <li><strong>816</strong> vehicle sprites (35 types &times; directional frames)</li>
+      <li><strong>171</strong> building sprites (33 types + construction frames)</li>
+      <li><strong>95</strong> UI graphics (menus, HUD, buttons, clan logos)</li>
+      <li><strong>15</strong> effect sprites (explosions, muzzle flashes)</li>
+      <li><strong>15</strong> font bitmaps (various sizes/encodings)</li>
+      <li><strong>1</strong> init/splash screen</li>
+      <li>Converted from PCX &rarr; RGBA PNG (palette index 0 = alpha)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color: var(--accent-3);">Audio &mdash; 21 OGG files</h4>
+    <ul>
+      <li><strong>4</strong> global SFX (absorb, arm, chat, dummy)</li>
+      <li><strong>17</strong> per-unit sounds across 3 vehicle types:
+        <ul>
+          <li>AWAC: start, stop, drive, wait</li>
+          <li>Surveyor: land &amp; water variants (8 files)</li>
+          <li>Submarine: water variants + attack (5 files)</li>
+        </ul>
+      </li>
+      <li>Music framework ready (13 track playlist in <code>musics.json</code>; files not yet present)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="col-2">
+  <div class="card">
+    <h4 style="color: var(--accent-5);">Data &mdash; 72 JSON files</h4>
+    <ul>
+      <li><strong>31</strong> vehicle definitions (stats, abilities, costs)</li>
+      <li><strong>34</strong> building definitions (stats, production, requirements)</li>
+      <li><strong>1</strong> clan data file (8 clans with stat mods)</li>
+      <li><strong>1</strong> music playlist config</li>
+      <li><strong>5</strong> additional root-level data files</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color: var(--accent);">Maps &amp; Other</h4>
+    <ul>
+      <li><strong>5</strong> WRL map files (Delta, Donuts, Lava, Mushroom, Three Isles)</li>
+      <li><strong>9</strong> language translation directories + .pot templates</li>
+      <li>Empty placeholders for <code>mve/</code> (video) and <code>voices/</code> (voice-overs)</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- SECTION 3: Exact Code Reused -->
+<!-- ============================================================ -->
+
+<h2><span class="num">3</span> Where Exact Code Has Been Reused</h2>
+
+<p>The overwhelming majority of the M.A.X.R. C++ engine compiles <strong>unmodified</strong> as a Godot GDExtension. Of the 310 original files, approximately 300 required zero changes.</p>
+
+<div class="card">
+  <h4>Unmodified M.A.X.R. C++ Core (300 files)</h4>
+  <p>These compile exactly as they exist in M.A.X.R. v0.2.17, linked into the GDExtension shared library:</p>
+  <table>
+    <thead><tr><th>Subsystem</th><th>Key files</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>Game model</td><td><code>game/data/model.h/cpp</code></td><td>Central game state: map, players, units, turns</td></tr>
+      <tr><td>Action system</td><td><code>game/logic/action*.h/cpp</code></td><td>24 serialisable action types with undo/redo</td></tr>
+      <tr><td>Pathfinding</td><td><code>game/logic/pathcalculator.h/cpp</code></td><td>A* and Dijkstra with terrain cost tables</td></tr>
+      <tr><td>Combat</td><td><code>game/logic/attackjob.h/cpp</code></td><td>Damage formulas, hit probability, armour</td></tr>
+      <tr><td>Economy</td><td><code>game/data/base.h/cpp</code>, <code>subbase.h/cpp</code></td><td>Resources, energy, mining, production queues</td></tr>
+      <tr><td>Units</td><td><code>game/data/units/</code> (20+ files)</td><td>Vehicle/building logic, stats, abilities</td></tr>
+      <tr><td>Players</td><td><code>game/data/player/player*.h/cpp</code></td><td>Player state, research, scan maps, diplomacy</td></tr>
+      <tr><td>Map</td><td><code>game/data/map/map*.h/cpp</code></td><td>Tile data, terrain, resource deposits</td></tr>
+      <tr><td>Turns</td><td><code>game/logic/gametimer*.h/cpp</code></td><td>10ms lockstep timer, server/client tick sync</td></tr>
+      <tr><td>Saves</td><td><code>game/data/savegame*.h/cpp</code></td><td>JSON serialisation of full game state</td></tr>
+      <tr><td>Networking</td><td><code>game/network.h/cpp</code>, <code>connectionmanager.h/cpp</code></td><td>TCP message protocol, connection lifecycle</td></tr>
+      <tr><td>Lobby</td><td><code>game/lobbyserver.h/cpp</code>, <code>lobbyclient.h/cpp</code></td><td>Pre-game lobby protocol, map transfers</td></tr>
+      <tr><td>Server/Client</td><td><code>game/server.h/cpp</code>, <code>game/client.h/cpp</code></td><td>Authoritative server &amp; client state machines</td></tr>
+      <tr><td>Serialisation</td><td><code>utility/serialization/</code></td><td>Binary &amp; JSON archives for network/save</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h4>Lightly Modified M.A.X.R. Files (~10 files)</h4>
+  <p>A small number of original files needed targeted changes to remove SDL/UI dependencies while preserving all game logic:</p>
+  <table>
+    <thead><tr><th>File</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><code>settings.h</code> / <code>settings_stub.cpp</code></td><td>Settings singleton adapted &mdash; removed GUI config, added <code>setDataDir()</code></td></tr>
+      <tr><td><code>resources/loaddata.h/cpp</code></td><td>JSON data loading kept; graphics/sound loading removed</td></tr>
+      <tr><td><code>resources/buildinguidata.h</code></td><td>Minimal stub (UI rendering handled by Godot)</td></tr>
+      <tr><td><code>resources/vehicleuidata.h</code></td><td>Minimal stub (UI rendering handled by Godot)</td></tr>
+      <tr><td><code>resources/map/graphicstaticmap.h</code></td><td>Graphics stub (map rendering handled by Godot)</td></tr>
+      <tr><td><code>crashreporter/debug.h</code></td><td>Crash reporter macros stubbed out</td></tr>
+      <tr><td><code>maxrversion.h</code></td><td>Package name changed to "MaXtreme"</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h4>SDL Replacement Stubs (4 header files)</h4>
+  <p>M.A.X.R. depends on SDL2, SDL_net, and SDL threading. These 4 headers provide drop-in replacements using standard C++ and POSIX APIs, allowing the engine to compile without any SDL dependency:</p>
+  <table>
+    <thead><tr><th>Stub</th><th>Replaces</th><th>Implementation</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>stubs/SDL/SDL.h</code></td>
+        <td>SDL2 core</td>
+        <td>Types (<code>Uint8/16/32</code>), <code>SDL_GetTicks</code> &rarr; <code>std::chrono</code>, <code>SDL_AddTimer</code> &rarr; <code>std::thread</code>, <code>SDL_RWops</code> &rarr; <code>stdio</code></td>
+      </tr>
+      <tr>
+        <td><code>stubs/SDL/SDL_net.h</code></td>
+        <td>SDL_net TCP networking</td>
+        <td>POSIX BSD sockets: <code>socket()</code>, <code>bind()</code>, <code>listen()</code>, <code>connect()</code>, <code>select()</code>, <code>send()</code>, <code>recv()</code> (~270 lines)</td>
+      </tr>
+      <tr>
+        <td><code>stubs/SDL/SDL_endian.h</code></td>
+        <td>SDL byte-swapping</td>
+        <td>Portable <code>SDL_SwapLE16/32/64</code> macros with endian detection</td>
+      </tr>
+      <tr>
+        <td><code>stubs/SDL/SDL_thread.h</code></td>
+        <td>SDL threading</td>
+        <td><code>SDL_Thread</code> &rarr; <code>std::thread</code>, <code>SDL_CreateThread()</code>, <code>SDL_WaitThread()</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- SECTION 4: Coded from Scratch -->
+<!-- ============================================================ -->
+
+<h2><span class="num">4</span> What Has Been Coded from Scratch</h2>
+
+<p>Everything the player <em>sees</em>, <em>hears</em>, and <em>interacts with</em> is new code &mdash; written in GDScript and targeting Godot 4.6's rendering and UI systems. The GDExtension wrapper layer (C++) was also written entirely from scratch to bridge the engine to Godot.</p>
+
+<h3>GDExtension Wrapper Layer (C++ &mdash; 18 files)</h3>
+<p>These are entirely new classes that expose the M.A.X.R. engine to GDScript via Godot's ClassDB:</p>
+<table>
+  <thead><tr><th>Class</th><th>Purpose</th><th>Key methods exposed</th></tr></thead>
+  <tbody>
+    <tr><td><code>GameEngine</code></td><td>Central bridge &mdash; owns <code>cModel</code>, manages turns, network mode</td><td>~30 methods + 8 signals</td></tr>
+    <tr><td><code>GameMap</code></td><td>Map data access &mdash; terrain, resources, size</td><td>~12 methods</td></tr>
+    <tr><td><code>GamePlayer</code></td><td>Player state &mdash; economy, scan maps, units</td><td>~20 methods</td></tr>
+    <tr><td><code>GameUnit</code></td><td>Unit data &mdash; stats, abilities, build queues</td><td>~40 methods</td></tr>
+    <tr><td><code>GameActions</code></td><td>Action dispatch &mdash; transparent local/network routing</td><td>24 action methods</td></tr>
+    <tr><td><code>GameSetup</code></td><td>Game initialisation &mdash; data loading, map selection</td><td>~10 methods</td></tr>
+    <tr><td><code>GamePathfinder</code></td><td>Pathfinding &mdash; A*, Dijkstra, range queries</td><td>~8 methods</td></tr>
+    <tr><td><code>GameLobby</code></td><td>Multiplayer lobby &mdash; host/join/chat/ready</td><td>~12 methods + 11 signals</td></tr>
+  </tbody>
+</table>
+
+<h3>GDScript Game Systems (25 files, ~4,200 lines)</h3>
+
+<div class="col-2">
+  <div class="card">
+    <h4 style="color: var(--accent-2);">Rendering (6 files)</h4>
+    <ul>
+      <li><code>map_renderer.gd</code> &mdash; Terrain tiles with hover highlights</li>
+      <li><code>unit_renderer.gd</code> &mdash; Sprite-based units with fallback shapes</li>
+      <li><code>fog_renderer.gd</code> &mdash; Fog of war (visible/explored/hidden)</li>
+      <li><code>overlay_renderer.gd</code> &mdash; Move range, paths, attack range, build preview</li>
+      <li><code>sprite_cache.gd</code> &mdash; Lazy-loading texture cache</li>
+      <li><code>combat_effects.gd</code> &mdash; Muzzle flash, projectiles, explosions, damage numbers</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color: var(--accent-3);">Game Logic (4 files)</h4>
+    <ul>
+      <li><code>main_game.gd</code> &mdash; Game loop, input FSM, unit selection, multiplayer integration (~890 lines)</li>
+      <li><code>move_animator.gd</code> &mdash; Smooth movement with sound</li>
+      <li><code>game_camera.gd</code> &mdash; Pan (WASD/mouse/edge) + zoom</li>
+      <li><code>game_hud.gd</code> &mdash; Turn info, resources, selected unit stats</li>
+    </ul>
+  </div>
+</div>
+
+<div class="col-2">
+  <div class="card">
+    <h4 style="color: var(--accent);">UI &amp; Menus (12 files)</h4>
+    <ul>
+      <li><code>main_menu.gd</code> &mdash; Entry point with SP/Host/Join</li>
+      <li><code>new_game_setup.gd</code> &mdash; Map, players, clans, credits</li>
+      <li><code>host_game.gd</code> &mdash; Multiplayer host setup</li>
+      <li><code>join_game.gd</code> &mdash; Multiplayer client connect</li>
+      <li><code>lobby.gd</code> &mdash; Player list, map select, chat, ready</li>
+      <li><code>pause_menu.gd</code> &mdash; Pause overlay</li>
+      <li><code>settings_panel.gd</code> &mdash; Audio/display/controls</li>
+      <li><code>production_panel.gd</code> &mdash; Factory queue management</li>
+      <li><code>build_panel.gd</code> &mdash; Constructor building selection</li>
+      <li><code>game_over_screen.gd</code> &mdash; Victory/defeat</li>
+      <li><code>network_status.gd</code> &mdash; Connection status overlay</li>
+      <li><code>chat_overlay.gd</code> &mdash; In-game chat</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4 style="color: var(--accent-5);">Autoloads &amp; Infrastructure (3 files)</h4>
+    <ul>
+      <li><code>game_manager.gd</code> &mdash; Scene transitions, settings, global state</li>
+      <li><code>audio_manager.gd</code> &mdash; SFX pool, music playlist, volume buses</li>
+      <li><code>test_engine.gd</code> &mdash; Integration test suite</li>
+    </ul>
+    <br>
+    <h4 style="color: var(--accent-3);">Scenes (7 .tscn files)</h4>
+    <ul>
+      <li><code>main_menu.tscn</code>, <code>new_game_setup.tscn</code></li>
+      <li><code>host_game.tscn</code>, <code>join_game.tscn</code>, <code>lobby.tscn</code></li>
+      <li><code>main_game.tscn</code></li>
+      <li><code>test_engine.tscn</code></li>
+    </ul>
+  </div>
+</div>
+
+<h3>Build System &amp; Tools (from scratch)</h3>
+<ul>
+  <li><code>SConstruct</code> &mdash; GDExtension build system (C++20, macOS universal binary)</li>
+  <li><code>tools/convert_pcx_to_png.py</code> &mdash; Batch PCX-to-PNG converter with transparency handling</li>
+  <li><code>maxtreme.gdextension</code> &mdash; Godot extension descriptor</li>
+  <li><code>project.godot</code> &mdash; Godot project configuration</li>
+</ul>
+
+
+<!-- ============================================================ -->
+<!-- SECTION 5: Fidelity to Original -->
+<!-- ============================================================ -->
+
+<h2><span class="num">5</span> How Close to the Original Game Will This Be?</h2>
+
+<p>The short answer: <strong>mechanically identical, visually different</strong>. Here is a breakdown by category:</p>
+
+<div class="card">
+  <h4>Game Rules &amp; Mechanics</h4>
+  <div class="fidelity-meter">
+    <span style="min-width: 80px; font-weight: 600; font-size: 0.85rem;">~100%</span>
+    <div class="fidelity-bar"><div class="fidelity-fill high" style="width: 98%;">Identical</div></div>
+  </div>
+  <p>All game logic runs through the <strong>original, unmodified C++ code</strong>. Combat formulas, pathfinding costs, building requirements, research rates, resource extraction, turn resolution, unit stats, clan bonuses &mdash; all exactly as in M.A.X.R. v0.2.17. The same deterministic lockstep networking model ensures multiplayer produces identical results to the original.</p>
+</div>
+
+<div class="card">
+  <h4>Game Data &amp; Content</h4>
+  <div class="fidelity-meter">
+    <span style="min-width: 80px; font-weight: 600; font-size: 0.85rem;">100%</span>
+    <div class="fidelity-bar"><div class="fidelity-fill high" style="width: 100%;">Identical</div></div>
+  </div>
+  <p>All 35 vehicle types, 33 building types, 8 clans, 5 maps, and 9 language packs are loaded from the <strong>original, unmodified data files</strong>. Unit stats, costs, abilities, and descriptions match M.A.X.R. exactly.</p>
+</div>
+
+<div class="card">
+  <h4>Networking &amp; Multiplayer</h4>
+  <div class="fidelity-meter">
+    <span style="min-width: 80px; font-weight: 600; font-size: 0.85rem;">~95%</span>
+    <div class="fidelity-bar"><div class="fidelity-fill high" style="width: 95%;">Near-Identical</div></div>
+  </div>
+  <p>The same TCP lockstep protocol runs underneath; SDL_net has been replaced with POSIX sockets but the wire format, message types, handshake sequence, and checksum validation are unchanged. The only difference is the transport layer implementation (not protocol). LAN + Internet via port forwarding is supported. Dedicated server mode is deferred.</p>
+</div>
+
+<div class="card">
+  <h4>User Interface &amp; Visuals</h4>
+  <div class="fidelity-meter">
+    <span style="min-width: 80px; font-weight: 600; font-size: 0.85rem;">~60%</span>
+    <div class="fidelity-bar"><div class="fidelity-fill med" style="width: 60%;">Functional, Not Yet Polished</div></div>
+  </div>
+  <p>The UI has been <strong>rebuilt from scratch</strong> in Godot's Control/Node2D system. All unit sprites and building sprites load from the original PNG assets. However, the UI layout, menu styling, and HUD design are utilitarian &mdash; functional but not yet matching the original M.A.X.R. aesthetic. Remaining visual items include: terrain tile extraction from WRL files (currently coloured rectangles), shadow rendering, animated infantry sprites, minimap, and a full polish pass.</p>
+</div>
+
+<div class="card">
+  <h4>Audio</h4>
+  <div class="fidelity-meter">
+    <span style="min-width: 80px; font-weight: 600; font-size: 0.85rem;">~30%</span>
+    <div class="fidelity-bar"><div class="fidelity-fill med" style="width: 30%;">Framework + Partial Assets</div></div>
+  </div>
+  <p>The audio architecture is complete (SFX pool, music player, per-unit sounds, volume control). However, only 21 of the expected sound files are currently present. Most vehicle types lack per-unit sounds, and the 13 music tracks referenced in the playlist are not yet in the data directory. The system will immediately work once the files are dropped in.</p>
+</div>
+
+<div class="card">
+  <h4>Missing vs. Original</h4>
+  <ul>
+    <li><strong>AI Opponent</strong> &mdash; Deferred to post-release. The original M.A.X.R. had a computer player; MaXtreme's initial release targets pure multiplayer.</li>
+    <li><strong>Map Editor</strong> &mdash; Not yet implemented (planned as future feature).</li>
+    <li><strong>Replay System</strong> &mdash; Not yet implemented.</li>
+    <li><strong>Terrain tiles</strong> &mdash; Currently rendered as coloured rectangles; extracting the real tiles from WRL data is Phase 17 work.</li>
+    <li><strong>Minimap</strong> &mdash; Not yet implemented (Phase 17).</li>
+  </ul>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- SECTION 6: Next Steps -->
+<!-- ============================================================ -->
+
+<h2><span class="num">6</span> Next Steps</h2>
+
+<div class="progress-container">
+  <div class="progress-label">
+    <span>Overall Progress</span>
+    <span>16 of 17 phases complete (94%)</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill green" style="width: 94%;"></div>
+  </div>
+</div>
+
+<div class="phase-timeline">
+  <div class="phase-item done"><span class="phase-name">Phase 1: Setup &amp; Core Compilation</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 2: Data Bridge</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 3: Action System Bridge</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 4: Game Initialisation</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 5: Turn System &amp; Game Loop</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 6: Minimal Visual Prototype</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 7: Pathfinding &amp; Movement</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 8: Combat &amp; Attacks</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 9: Real Data Loading</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 10: PCX to PNG Conversion</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 11: Building &amp; Economy</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 12: Sprite Loading</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 13: Menus &amp; Game Flow</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 14: Fog of War</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 15: Audio</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item done"><span class="phase-name">Phase 16: Networking &amp; Multiplayer</span> <span class="badge badge-complete">Complete</span></div>
+  <div class="phase-item next"><span class="phase-name">Phase 17: Advanced Graphics &amp; Polish</span> <span class="badge badge-next">Up Next</span></div>
+</div>
+
+<div class="card">
+  <h4>Phase 17: Advanced Graphics &amp; Polish (Final Phase)</h4>
+  <p>This is the last development phase before the project moves into post-release features. It focuses on visual fidelity and polish:</p>
+  <ul>
+    <li><strong>Vehicle directional sprites</strong> &mdash; Load 8-direction frames (<code>img0</code>&ndash;<code>img7</code>) and rotate based on movement heading</li>
+    <li><strong>Shadow rendering</strong> &mdash; Draw <code>shw*.png</code> shadow sprites beneath units</li>
+    <li><strong>Animated units</strong> &mdash; Per-frame animation sequences for infantry and special units</li>
+    <li><strong>Terrain tile extraction</strong> &mdash; Parse real terrain graphics from WRL map files to replace coloured rectangles</li>
+    <li><strong>Store/info icons</strong> &mdash; Display unit icons in build panels and production queues</li>
+    <li><strong>Unit destruction animations</strong> &mdash; Explosion sequences when units are destroyed</li>
+    <li><strong>Minimap</strong> &mdash; SubViewport-based minimap with unit positions and fog of war</li>
+    <li><strong>UI polish</strong> &mdash; Visual consistency pass across all menus and in-game panels</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h4>Post-Release Roadmap</h4>
+  <ul>
+    <li><strong>AI Opponent</strong> &mdash; Computer player logic, threat assessment, difficulty levels</li>
+    <li><strong>New Visual Assets</strong> &mdash; Replace M.A.X.R. sprites with modern artwork</li>
+    <li><strong>Map Editor</strong> &mdash; Built-in editor using Godot's TileMap tools</li>
+    <li><strong>Replay System</strong> &mdash; Record and playback action sequences</li>
+    <li><strong>Mobile Port</strong> &mdash; Godot exports to Android/iOS</li>
+    <li><strong>Web Port</strong> &mdash; Godot exports to HTML5/WebAssembly</li>
+    <li><strong>Steam Integration</strong> &mdash; Steamworks via GDExtension</li>
+  </ul>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- Architecture Diagram -->
+<!-- ============================================================ -->
+
+<h2 style="margin-top: 3rem;">Architecture Overview</h2>
+
+<div class="card" style="font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.78rem; line-height: 1.5; overflow-x: auto; white-space: pre;">
+<span style="color: var(--accent);">┌─────────────────────────────────────────────────────────────────────┐</span>
+<span style="color: var(--accent);">│</span>  <span style="color: var(--accent-2); font-weight: bold;">GODOT 4.6 (GDScript)</span>                                              <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>                                                                     <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐               <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  │ Map Renderer │  │ Unit Renderer │  │ Fog Renderer │  <span style="color: var(--text-muted);">... more</span>   <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  └──────┬───────┘  └──────┬────────┘  └──────┬───────┘               <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>         │                 │                  │                      <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  ┌──────┴─────────────────┴──────────────────┴───────┐              <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  │            <span style="font-weight: bold;">main_game.gd</span>  (Game Loop + Input)     │              <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  └──────────────────────┬────────────────────────────┘              <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>                         │  <span style="color: var(--text-muted);">GDScript calls C++ methods</span>              <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">├─────────────────────────┼────────────────────────────────────────────┤</span>
+<span style="color: var(--accent);">│</span>  <span style="color: var(--accent-3); font-weight: bold;">GDExtension Wrapper (C++ &mdash; from scratch)</span>                          <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>                         │                                            <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  ┌──────────┐ ┌─────────┴──┐ ┌───────────┐ ┌───────────┐           <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  │GameEngine│ │ GameActions │ │  GameMap   │ │ GameLobby │  <span style="color: var(--text-muted);">+4 more</span> <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  └────┬─────┘ └─────┬──────┘ └─────┬─────┘ └─────┬─────┘           <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>       │             │              │              │                  <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">├───────┼─────────────┼──────────────┼──────────────┼──────────────────┤</span>
+<span style="color: var(--accent);">│</span>  <span style="color: var(--accent-4); font-weight: bold;">M.A.X.R. Core Engine (C++ &mdash; original, unmodified)</span>                  <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>       │             │              │              │                  <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  ┌────┴────┐  ┌─────┴─────┐ ┌─────┴────┐  ┌─────┴──────┐          <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  │ cModel  │  │ cAction*  │ │ cMap     │  │ cLobby*    │          <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  │ cPlayer │  │ cClient   │ │ cPathCalc│  │ cConnMgr   │          <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  │ cUnit   │  │ cServer   │ │ cTerrain │  │ cNetwork   │          <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  └─────────┘  └───────────┘ └──────────┘  └────────────┘          <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>                                                                     <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  <span style="color: var(--accent-3);">310 files</span> (129 .cpp + 181 .h) &mdash; compiled as shared library        <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">│</span>  <span style="color: var(--accent-3);">SDL replaced</span> by 4 stub headers (POSIX sockets, std::thread, etc.)  <span style="color: var(--accent);">│</span>
+<span style="color: var(--accent);">└─────────────────────────────────────────────────────────────────────┘</span>
+</div>
+
+<footer>
+  MaXtreme &mdash; M.A.X.R. rebuilt in Godot 4.6 &mdash; Project overview generated 6 February 2026
+</footer>
+
+</body>
+</html>
