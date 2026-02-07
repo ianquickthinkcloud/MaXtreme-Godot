@@ -31,7 +31,12 @@ func _ready() -> void:
 	var game_info: Dictionary = engine.new_game_test()
 	assert(game_info["success"], "Game should start successfully")
 	print("[TEST] Game started: ", game_info["player_count"], " players, ",
-		  game_info["units_per_player"], " units each")
+		  game_info["units_total"], " total units")
+	print("[TEST] Map: ", game_info.get("map_name", "unknown"), " (",
+		  game_info.get("map_width", 0), "x", game_info.get("map_height", 0), ")")
+	print("[TEST] Unit types: ", game_info.get("vehicle_types", 0), " vehicles, ",
+		  game_info.get("building_types", 0), " buildings, ",
+		  game_info.get("clan_count", 0), " clans")
 	print("")
 
 	# --- Verify initial state ---

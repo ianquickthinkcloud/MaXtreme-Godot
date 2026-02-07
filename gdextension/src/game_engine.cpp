@@ -19,6 +19,11 @@
 #include "game/logic/turncounter.h"
 #include "game/logic/action/actionendturn.h"
 #include "game/logic/action/actionstartturn.h"
+#include "game/logic/server.h"
+#include "game/logic/client.h"
+#include "game/connectionmanager.h"
+#include "game/data/savegame.h"
+#include "game/data/savegameinfo.h"
 #include "utility/log.h"
 
 using namespace godot;
@@ -53,10 +58,29 @@ void GameEngine::_bind_methods() {
     // Pathfinding (Phase 7)
     ClassDB::bind_method(D_METHOD("get_pathfinder"), &GameEngine::get_pathfinder);
 
-    // Game initialization (Phase 4)
+    // Data loading (Phase 8)
+    ClassDB::bind_method(D_METHOD("load_game_data"), &GameEngine::load_game_data);
+    ClassDB::bind_method(D_METHOD("get_available_maps"), &GameEngine::get_available_maps);
+    ClassDB::bind_method(D_METHOD("get_available_clans"), &GameEngine::get_available_clans);
+    ClassDB::bind_method(D_METHOD("get_unit_data_info"), &GameEngine::get_unit_data_info);
+
+    // Phase 18: Pre-game setup data
+    ClassDB::bind_method(D_METHOD("get_purchasable_vehicles", "clan"), &GameEngine::get_purchasable_vehicles);
+    ClassDB::bind_method(D_METHOD("get_initial_landing_units", "clan", "start_credits", "bridgehead_type"), &GameEngine::get_initial_landing_units);
+    ClassDB::bind_method(D_METHOD("get_clan_details"), &GameEngine::get_clan_details);
+    ClassDB::bind_method(D_METHOD("check_landing_position", "map_name", "pos"), &GameEngine::check_landing_position);
+
+    // Game initialization (Phase 4, updated Phase 8)
     ClassDB::bind_method(D_METHOD("new_game_test"), &GameEngine::new_game_test);
-    ClassDB::bind_method(D_METHOD("new_game", "player_names", "player_colors", "map_size", "start_credits"),
+    ClassDB::bind_method(D_METHOD("new_game", "map_name", "player_names", "player_colors", "player_clans", "start_credits"),
                          &GameEngine::new_game);
+    ClassDB::bind_method(D_METHOD("new_game_ex", "game_settings"), &GameEngine::new_game_ex);
+
+    // Save/Load (Phase 13)
+    ClassDB::bind_method(D_METHOD("save_game", "slot", "save_name"), &GameEngine::save_game);
+    ClassDB::bind_method(D_METHOD("load_game", "slot"), &GameEngine::load_game);
+    ClassDB::bind_method(D_METHOD("get_save_game_list"), &GameEngine::get_save_game_list);
+    ClassDB::bind_method(D_METHOD("get_save_game_info", "slot"), &GameEngine::get_save_game_info);
 
     // Turn system & game loop (Phase 5)
     ClassDB::bind_method(D_METHOD("advance_tick"), &GameEngine::advance_tick);
@@ -70,20 +94,127 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_game_state"), &GameEngine::get_game_state);
     ClassDB::bind_method(D_METHOD("process_game_tick"), &GameEngine::process_game_tick);
 
+    // Networking (Phase 16)
+    ClassDB::bind_method(D_METHOD("get_network_mode"), &GameEngine::get_network_mode);
+    ClassDB::bind_method(D_METHOD("is_multiplayer"), &GameEngine::is_multiplayer);
+
     // Signals for turn system events
     ADD_SIGNAL(MethodInfo("turn_ended"));
     ADD_SIGNAL(MethodInfo("turn_started", PropertyInfo(Variant::INT, "turn_number")));
     ADD_SIGNAL(MethodInfo("player_finished_turn", PropertyInfo(Variant::INT, "player_id")));
     ADD_SIGNAL(MethodInfo("player_won", PropertyInfo(Variant::INT, "player_id")));
     ADD_SIGNAL(MethodInfo("player_lost", PropertyInfo(Variant::INT, "player_id")));
+
+    // Network signals
+    ADD_SIGNAL(MethodInfo("freeze_mode_changed", PropertyInfo(Variant::STRING, "mode")));
+    ADD_SIGNAL(MethodInfo("connection_lost"));
 }
 
 GameEngine::GameEngine() {
     engine_initialized = false;
+    network_mode = SINGLE_PLAYER;
 }
 
 GameEngine::~GameEngine() {
+    // Stop server/client threads before cleanup
+    if (server) {
+        server->stop();
+    }
     // unique_ptr handles cleanup
+}
+
+// --- Model accessor ---
+
+cModel* GameEngine::get_active_model() const {
+    switch (network_mode) {
+        case HOST:
+            if (server) return const_cast<cModel*>(&server->getModel());
+            break;
+        case CLIENT:
+            if (client) return const_cast<cModel*>(&client->getModel());
+            break;
+        case SINGLE_PLAYER:
+        default:
+            return model.get();
+    }
+    return model.get();
+}
+
+// --- Networking (Phase 16) ---
+
+bool GameEngine::setup_as_host(int port) {
+    // This is a simplified setup; the real flow goes through GameLobby
+    UtilityFunctions::print("[MaXtreme] setup_as_host on port ", port);
+    network_mode = HOST;
+    return true;
+}
+
+bool GameEngine::setup_as_client() {
+    UtilityFunctions::print("[MaXtreme] setup_as_client");
+    network_mode = CLIENT;
+    return true;
+}
+
+void GameEngine::accept_lobby_handoff(std::shared_ptr<cConnectionManager> conn_mgr,
+                                       std::unique_ptr<cServer> srv,
+                                       std::unique_ptr<cClient> cli,
+                                       NetworkMode mode) {
+    connection_manager = conn_mgr;
+    server = std::move(srv);
+    client = std::move(cli);
+    network_mode = mode;
+    engine_initialized = true;
+
+    // Connect model signals from the active model
+    cModel* m = get_active_model();
+    if (m) {
+        m->turnEnded.connect([this]() {
+            call_deferred("emit_signal", "turn_ended");
+        });
+        m->newTurnStarted.connect([this](const sNewTurnReport&) {
+            auto* am = get_active_model();
+            auto tc = am ? am->getTurnCounter() : nullptr;
+            int turn = tc ? tc->getTurn() : 0;
+            call_deferred("emit_signal", "turn_started", turn);
+        });
+        m->playerFinishedTurn.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_finished_turn", player.getId());
+        });
+        m->playerHasWon.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_won", player.getId());
+        });
+        m->playerHasLost.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_lost", player.getId());
+        });
+    }
+
+    if (client) {
+        client->freezeModeChanged.connect([this]() {
+            call_deferred("emit_signal", "freeze_mode_changed", String("changed"));
+        });
+        client->connectionToServerLost.connect([this]() {
+            call_deferred("emit_signal", "connection_lost");
+        });
+    }
+
+    UtilityFunctions::print("[MaXtreme] Lobby handoff complete, mode=",
+                            mode == HOST ? "HOST" : "CLIENT");
+}
+
+String GameEngine::get_network_mode() const {
+    switch (network_mode) {
+        case HOST: return String("host");
+        case CLIENT: return String("client");
+        default: return String("single_player");
+    }
+}
+
+bool GameEngine::is_multiplayer() const {
+    return network_mode != SINGLE_PLAYER;
+}
+
+cClient* GameEngine::get_client() const {
+    return client.get();
 }
 
 // --- Lifecycle ---
@@ -118,14 +249,16 @@ void GameEngine::initialize_engine() {
 // --- Game state ---
 
 int GameEngine::get_turn_number() const {
-    if (!model) return -1;
-    auto turnCounter = model->getTurnCounter();
+    auto* m = get_active_model();
+    if (!m) return -1;
+    auto turnCounter = m->getTurnCounter();
     return turnCounter ? turnCounter->getTurn() : 0;
 }
 
 int GameEngine::get_player_count() const {
-    if (!model) return 0;
-    return static_cast<int>(model->getPlayerList().size());
+    auto* m = get_active_model();
+    if (!m) return 0;
+    return static_cast<int>(m->getPlayerList().size());
 }
 
 // --- Map access ---
@@ -133,15 +266,17 @@ int GameEngine::get_player_count() const {
 Ref<GameMap> GameEngine::get_map() const {
     Ref<GameMap> game_map;
     game_map.instantiate();
-    if (model) {
-        game_map->set_internal_map(model->getMap());
+    auto* m = get_active_model();
+    if (m) {
+        game_map->set_internal_map(m->getMap());
     }
     return game_map;
 }
 
 String GameEngine::get_map_name() const {
-    if (!model) return String("(no model)");
-    auto map = model->getMap();
+    auto* m = get_active_model();
+    if (!m) return String("(no model)");
+    auto map = m->getMap();
     if (!map) return String("(no map loaded)");
     auto fn = map->getFilename().string();
     if (fn.empty()) return String("(empty map)");
@@ -153,9 +288,10 @@ String GameEngine::get_map_name() const {
 Ref<GamePlayer> GameEngine::get_player(int index) const {
     Ref<GamePlayer> game_player;
     game_player.instantiate();
-    if (!model) return game_player;
+    auto* m = get_active_model();
+    if (!m) return game_player;
 
-    const auto& players = model->getPlayerList();
+    const auto& players = m->getPlayerList();
     if (index < 0 || index >= static_cast<int>(players.size())) return game_player;
 
     game_player->set_internal_player(players[index]);
@@ -164,9 +300,10 @@ Ref<GamePlayer> GameEngine::get_player(int index) const {
 
 Array GameEngine::get_all_players() const {
     Array result;
-    if (!model) return result;
+    auto* m = get_active_model();
+    if (!m) return result;
 
-    const auto& players = model->getPlayerList();
+    const auto& players = m->getPlayerList();
     for (size_t i = 0; i < players.size(); i++) {
         Ref<GamePlayer> gp;
         gp.instantiate();
@@ -181,21 +318,20 @@ Array GameEngine::get_all_players() const {
 Ref<GameUnit> GameEngine::get_unit_by_id(int player_index, int unit_id) const {
     Ref<GameUnit> game_unit;
     game_unit.instantiate();
-    if (!model) return game_unit;
+    auto* m = get_active_model();
+    if (!m) return game_unit;
 
-    const auto& players = model->getPlayerList();
+    const auto& players = m->getPlayerList();
     if (player_index < 0 || player_index >= static_cast<int>(players.size())) return game_unit;
 
     const auto& player = players[player_index];
 
-    // Search vehicles first
     auto* vehicle = player->getVehicleFromId(static_cast<unsigned int>(unit_id));
     if (vehicle) {
         game_unit->set_internal_unit(vehicle);
         return game_unit;
     }
 
-    // Then buildings
     auto* building = player->getBuildingFromId(static_cast<unsigned int>(unit_id));
     if (building) {
         game_unit->set_internal_unit(building);
@@ -207,9 +343,10 @@ Ref<GameUnit> GameEngine::get_unit_by_id(int player_index, int unit_id) const {
 
 Array GameEngine::get_player_vehicles(int player_index) const {
     Array result;
-    if (!model) return result;
+    auto* m = get_active_model();
+    if (!m) return result;
 
-    const auto& players = model->getPlayerList();
+    const auto& players = m->getPlayerList();
     if (player_index < 0 || player_index >= static_cast<int>(players.size())) return result;
 
     const auto& player = players[player_index];
@@ -224,9 +361,10 @@ Array GameEngine::get_player_vehicles(int player_index) const {
 
 Array GameEngine::get_player_buildings(int player_index) const {
     Array result;
-    if (!model) return result;
+    auto* m = get_active_model();
+    if (!m) return result;
 
-    const auto& players = model->getPlayerList();
+    const auto& players = m->getPlayerList();
     if (player_index < 0 || player_index >= static_cast<int>(players.size())) return result;
 
     const auto& player = players[player_index];
@@ -239,13 +377,36 @@ Array GameEngine::get_player_buildings(int player_index) const {
     return result;
 }
 
+// --- Phase 18: Pre-game setup data ---
+
+Array GameEngine::get_purchasable_vehicles(int clan) const {
+    return GameSetup::get_purchasable_vehicles(clan);
+}
+
+Array GameEngine::get_initial_landing_units(int clan, int start_credits, String bridgehead_type) const {
+    return GameSetup::get_initial_landing_units(clan, start_credits, bridgehead_type);
+}
+
+Array GameEngine::get_clan_details() const {
+    return GameSetup::get_clan_details();
+}
+
+bool GameEngine::check_landing_position(String map_name, Vector2i pos) const {
+    return GameSetup::check_landing_position(map_name, pos);
+}
+
 // --- Action system ---
 
 Ref<GameActions> GameEngine::get_actions() const {
     Ref<GameActions> actions;
     actions.instantiate();
-    if (model) {
-        actions->set_internal_model(model.get());
+    auto* m = get_active_model();
+    if (m) {
+        actions->set_internal_model(m);
+    }
+    // In multiplayer, route actions through cClient
+    if (client) {
+        actions->set_internal_client(client.get());
     }
     return actions;
 }
@@ -255,58 +416,57 @@ Ref<GameActions> GameEngine::get_actions() const {
 Ref<GamePathfinder> GameEngine::get_pathfinder() const {
     Ref<GamePathfinder> pf;
     pf.instantiate();
-    if (model) {
-        pf->set_internal_model(model.get());
+    auto* m = get_active_model();
+    if (m) {
+        pf->set_internal_model(m);
     }
     return pf;
 }
 
-// --- Game initialization (Phase 4) ---
+// --- Data loading (Phase 8) ---
 
-Dictionary GameEngine::new_game_test() {
-    // Delegate to new_game with default test parameters
-    Array names;
-    names.push_back(String("Player 1"));
-    names.push_back(String("Player 2"));
-    Array colors;
-    colors.push_back(Color(0.0f, 0.0f, 1.0f));
-    colors.push_back(Color(1.0f, 0.0f, 0.0f));
-    return new_game(names, colors, 64, 150);
+bool GameEngine::load_game_data() {
+    return GameSetup::ensure_data_loaded();
 }
 
-Dictionary GameEngine::new_game(Array player_names, Array player_colors, int map_size, int start_credits) {
+Array GameEngine::get_available_maps() const {
+    return GameSetup::get_available_maps();
+}
+
+Array GameEngine::get_available_clans() const {
+    return GameSetup::get_available_clans();
+}
+
+Dictionary GameEngine::get_unit_data_info() const {
+    return GameSetup::get_unit_data_info();
+}
+
+// --- Game initialization (Phase 4, updated Phase 8) ---
+
+Dictionary GameEngine::new_game_test() {
     if (!engine_initialized) {
         initialize_engine();
     }
     // Reset model for new game
     model = std::make_unique<cModel>();
-    auto result = GameSetup::setup_custom_game(*model, player_names, player_colors, map_size, start_credits);
+    auto result = GameSetup::setup_test_game(*model);
 
     // Connect model signals to Godot signals
     if (result.has("success") && bool(result["success"]) && model) {
-        // Turn ended signal
         model->turnEnded.connect([this]() {
             call_deferred("emit_signal", "turn_ended");
         });
-
-        // New turn started signal
         model->newTurnStarted.connect([this](const sNewTurnReport&) {
             auto tc = model->getTurnCounter();
             int turn = tc ? tc->getTurn() : 0;
             call_deferred("emit_signal", "turn_started", turn);
         });
-
-        // Player finished turn signal
         model->playerFinishedTurn.connect([this](const cPlayer& player) {
             call_deferred("emit_signal", "player_finished_turn", player.getId());
         });
-
-        // Player won signal
         model->playerHasWon.connect([this](const cPlayer& player) {
             call_deferred("emit_signal", "player_won", player.getId());
         });
-
-        // Player lost signal
         model->playerHasLost.connect([this](const cPlayer& player) {
             call_deferred("emit_signal", "player_lost", player.getId());
         });
@@ -315,29 +475,221 @@ Dictionary GameEngine::new_game(Array player_names, Array player_colors, int map
     return result;
 }
 
+Dictionary GameEngine::new_game(String map_name, Array player_names, Array player_colors, Array player_clans, int start_credits) {
+    if (!engine_initialized) {
+        initialize_engine();
+    }
+    // Reset model for new game
+    model = std::make_unique<cModel>();
+    auto result = GameSetup::setup_custom_game(*model, map_name, player_names, player_colors, player_clans, start_credits);
+
+    // Connect model signals to Godot signals
+    if (result.has("success") && bool(result["success"]) && model) {
+        model->turnEnded.connect([this]() {
+            call_deferred("emit_signal", "turn_ended");
+        });
+        model->newTurnStarted.connect([this](const sNewTurnReport&) {
+            auto tc = model->getTurnCounter();
+            int turn = tc ? tc->getTurn() : 0;
+            call_deferred("emit_signal", "turn_started", turn);
+        });
+        model->playerFinishedTurn.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_finished_turn", player.getId());
+        });
+        model->playerHasWon.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_won", player.getId());
+        });
+        model->playerHasLost.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_lost", player.getId());
+        });
+    }
+
+    return result;
+}
+
+Dictionary GameEngine::new_game_ex(Dictionary game_settings) {
+    if (!engine_initialized) {
+        initialize_engine();
+    }
+    // Reset model for new game
+    model = std::make_unique<cModel>();
+    auto result = GameSetup::setup_custom_game_ex(*model, game_settings);
+
+    // Connect model signals to Godot signals
+    if (result.has("success") && bool(result["success"]) && model) {
+        model->turnEnded.connect([this]() {
+            call_deferred("emit_signal", "turn_ended");
+        });
+        model->newTurnStarted.connect([this](const sNewTurnReport&) {
+            auto tc = model->getTurnCounter();
+            int turn = tc ? tc->getTurn() : 0;
+            call_deferred("emit_signal", "turn_started", turn);
+        });
+        model->playerFinishedTurn.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_finished_turn", player.getId());
+        });
+        model->playerHasWon.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_won", player.getId());
+        });
+        model->playerHasLost.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_lost", player.getId());
+        });
+    }
+
+    return result;
+}
+
+// --- Save/Load (Phase 13) ---
+
+bool GameEngine::save_game(int slot, String save_name) {
+    auto* m = get_active_model();
+    if (!m) {
+        UtilityFunctions::push_warning("[MaXtreme] save_game: No active game to save");
+        return false;
+    }
+    try {
+        cSavegame savegame;
+        std::string name = save_name.utf8().get_data();
+        savegame.save(*m, slot, name);
+        UtilityFunctions::print("[MaXtreme] Game saved to slot ", slot, ": ", save_name);
+        return true;
+    } catch (const std::exception& e) {
+        UtilityFunctions::push_error("[MaXtreme] save_game failed: ", e.what());
+        return false;
+    }
+}
+
+Dictionary GameEngine::load_game(int slot) {
+    Dictionary result;
+    try {
+        if (!engine_initialized) {
+            initialize_engine();
+        }
+        // Reset model for loading
+        model = std::make_unique<cModel>();
+
+        cSavegame savegame;
+        savegame.loadModel(*model, slot);
+
+        // Reconnect model signals
+        model->turnEnded.connect([this]() {
+            call_deferred("emit_signal", "turn_ended");
+        });
+        model->newTurnStarted.connect([this](const sNewTurnReport&) {
+            auto tc = model->getTurnCounter();
+            int turn = tc ? tc->getTurn() : 0;
+            call_deferred("emit_signal", "turn_started", turn);
+        });
+        model->playerFinishedTurn.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_finished_turn", player.getId());
+        });
+        model->playerHasWon.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_won", player.getId());
+        });
+        model->playerHasLost.connect([this](const cPlayer& player) {
+            call_deferred("emit_signal", "player_lost", player.getId());
+        });
+
+        result["success"] = true;
+        result["slot"] = slot;
+        result["turn"] = get_turn_number();
+        result["player_count"] = get_player_count();
+        result["map_name"] = get_map_name();
+        UtilityFunctions::print("[MaXtreme] Game loaded from slot ", slot);
+    } catch (const std::exception& e) {
+        result["success"] = false;
+        result["error"] = String(e.what());
+        UtilityFunctions::push_error("[MaXtreme] load_game failed: ", e.what());
+    }
+    return result;
+}
+
+Array GameEngine::get_save_game_list() {
+    Array result;
+    try {
+        std::vector<cSaveGameInfo> saves;
+        fillSaveGames(0, 100, saves);
+        for (const auto& info : saves) {
+            Dictionary d;
+            d["slot"] = info.number;
+            d["name"] = String(info.gameName.c_str());
+            d["date"] = String(info.date.c_str());
+            d["turn"] = static_cast<int>(info.turn);
+            d["map"] = String(info.mapFilename.string().c_str());
+
+            Array players;
+            for (const auto& p : info.players) {
+                Dictionary pd;
+                pd["name"] = String(p.getName().c_str());
+                pd["id"] = p.getNr();
+                pd["defeated"] = p.isDefeated();
+                players.push_back(pd);
+            }
+            d["players"] = players;
+            result.push_back(d);
+        }
+    } catch (const std::exception& e) {
+        UtilityFunctions::push_warning("[MaXtreme] get_save_game_list: ", e.what());
+    }
+    return result;
+}
+
+Dictionary GameEngine::get_save_game_info(int slot) {
+    Dictionary result;
+    try {
+        cSavegame savegame;
+        auto info = savegame.loadSaveInfo(slot);
+        result["slot"] = info.number;
+        result["name"] = String(info.gameName.c_str());
+        result["date"] = String(info.date.c_str());
+        result["turn"] = static_cast<int>(info.turn);
+        result["map"] = String(info.mapFilename.string().c_str());
+
+        Array players;
+        for (const auto& p : info.players) {
+            Dictionary pd;
+            pd["name"] = String(p.getName().c_str());
+            pd["id"] = p.getNr();
+            pd["defeated"] = p.isDefeated();
+            players.push_back(pd);
+        }
+        result["players"] = players;
+    } catch (const std::exception& e) {
+        result["error"] = String(e.what());
+    }
+    return result;
+}
+
 // --- Turn System & Game Loop (Phase 5) ---
 
 void GameEngine::advance_tick() {
-    if (!model) return;
-    model->advanceGameTime();
+    // In multiplayer mode, ticks are driven by the lockstep timer automatically
+    if (network_mode != SINGLE_PLAYER) return;
+    auto* m = get_active_model();
+    if (!m) return;
+    m->advanceGameTime();
 }
 
 void GameEngine::advance_ticks(int count) {
-    if (!model) return;
+    if (network_mode != SINGLE_PLAYER) return;
+    auto* m = get_active_model();
+    if (!m) return;
     for (int i = 0; i < count; i++) {
-        model->advanceGameTime();
+        m->advanceGameTime();
     }
 }
 
 int GameEngine::get_game_time() const {
-    if (!model) return 0;
-    return static_cast<int>(model->getGameTime());
+    auto* m = get_active_model();
+    if (!m) return 0;
+    return static_cast<int>(m->getGameTime());
 }
 
 bool GameEngine::end_player_turn(int player_id) {
-    if (!model) return false;
+    auto* m = get_active_model();
+    if (!m) return false;
 
-    cPlayer* player = model->getPlayer(player_id);
+    cPlayer* player = m->getPlayer(player_id);
     if (!player) {
         UtilityFunctions::push_warning("[MaXtreme] end_player_turn: player ", player_id, " not found");
         return false;
@@ -353,14 +705,15 @@ bool GameEngine::end_player_turn(int player_id) {
         return false;
     }
 
-    model->handlePlayerFinishedTurn(*player);
+    m->handlePlayerFinishedTurn(*player);
     return true;
 }
 
 bool GameEngine::start_player_turn(int player_id) {
-    if (!model) return false;
+    auto* m = get_active_model();
+    if (!m) return false;
 
-    cPlayer* player = model->getPlayer(player_id);
+    cPlayer* player = m->getPlayer(player_id);
     if (!player) {
         UtilityFunctions::push_warning("[MaXtreme] start_player_turn: player ", player_id, " not found");
         return false;
@@ -368,19 +721,14 @@ bool GameEngine::start_player_turn(int player_id) {
 
     if (player->isDefeated) return false;
 
-    model->handlePlayerStartTurn(*player);
+    m->handlePlayerStartTurn(*player);
     return true;
 }
 
 bool GameEngine::is_turn_active() const {
-    if (!model) return false;
-    // A turn is "active" when players are issuing commands.
-    // We detect this by checking that no turn-end processing is happening.
-    // The turn-end states transition through: TurnActive -> ExecuteRemainingMovements -> ExecuteTurnStart
-    // During TurnActive, players can issue commands.
-    // We approximate this by checking if all players have NOT finished their turn yet
-    // OR at least one player hasn't finished (in simultaneous mode).
-    const auto& players = model->getPlayerList();
+    auto* m = get_active_model();
+    if (!m) return false;
+    const auto& players = m->getPlayerList();
     bool anyActive = false;
     for (const auto& p : players) {
         if (!p->isDefeated && !p->getHasFinishedTurn()) {
@@ -392,8 +740,9 @@ bool GameEngine::is_turn_active() const {
 }
 
 bool GameEngine::all_players_finished() const {
-    if (!model) return false;
-    const auto& players = model->getPlayerList();
+    auto* m = get_active_model();
+    if (!m) return false;
+    const auto& players = m->getPlayerList();
     for (const auto& p : players) {
         if (!p->isDefeated && !p->getHasFinishedTurn()) {
             return false;
@@ -403,12 +752,10 @@ bool GameEngine::all_players_finished() const {
 }
 
 String GameEngine::get_turn_state() const {
-    if (!model) return String("no_model");
+    auto* m = get_active_model();
+    if (!m) return String("no_model");
 
-    // Check if all players finished (turn-end processing is happening or about to)
     if (all_players_finished()) {
-        // Check if there are active move jobs (ExecuteRemainingMovements state)
-        // We can't directly access turnEndState, but we can infer from game state
         return String("processing");
     }
     return String("active");
@@ -416,7 +763,8 @@ String GameEngine::get_turn_state() const {
 
 Dictionary GameEngine::get_game_state() const {
     Dictionary state;
-    if (!model) {
+    auto* m = get_active_model();
+    if (!m) {
         state["valid"] = false;
         return state;
     }
@@ -428,11 +776,11 @@ Dictionary GameEngine::get_game_state() const {
     state["is_turn_active"] = is_turn_active();
     state["all_finished"] = all_players_finished();
     state["player_count"] = get_player_count();
-    state["game_id"] = static_cast<int>(model->getGameId());
+    state["game_id"] = static_cast<int>(m->getGameId());
+    state["network_mode"] = get_network_mode();
 
-    // Per-player state
     Array player_states;
-    const auto& players = model->getPlayerList();
+    const auto& players = m->getPlayerList();
     for (const auto& p : players) {
         Dictionary ps;
         ps["id"] = p->getId();
@@ -452,27 +800,33 @@ Dictionary GameEngine::get_game_state() const {
 
 Dictionary GameEngine::process_game_tick() {
     Dictionary result;
-    if (!model) {
+    auto* m = get_active_model();
+    if (!m) {
         result["processed"] = false;
         return result;
     }
 
-    int prev_turn = get_turn_number();
-    int prev_time = get_game_time();
-    bool was_active = is_turn_active();
+    // In multiplayer, ticks are automatic -- just report current state
+    if (network_mode != SINGLE_PLAYER) {
+        result["processed"] = true;
+        result["game_time"] = get_game_time();
+        result["turn"] = get_turn_number();
+        result["turn_changed"] = false;
+        result["is_turn_active"] = is_turn_active();
+        return result;
+    }
 
-    // Advance one tick
-    model->advanceGameTime();
+    int prev_turn = get_turn_number();
+
+    m->advanceGameTime();
 
     int new_turn = get_turn_number();
-    int new_time = get_game_time();
-    bool now_active = is_turn_active();
 
     result["processed"] = true;
-    result["game_time"] = new_time;
+    result["game_time"] = get_game_time();
     result["turn"] = new_turn;
     result["turn_changed"] = (new_turn != prev_turn);
-    result["is_turn_active"] = now_active;
+    result["is_turn_active"] = is_turn_active();
 
     return result;
 }

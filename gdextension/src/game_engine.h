@@ -11,6 +11,9 @@
 // Forward declarations of M.A.X.R. core types
 class cModel;
 class cUnitsData;
+class cServer;
+class cClient;
+class cConnectionManager;
 
 // Forward declarations of wrapper types
 namespace godot {
@@ -20,21 +23,38 @@ class GameUnit;
 class GameActions;
 class GameSetup;
 class GamePathfinder;
+class GameLobby;
 }
 
 namespace godot {
 
 /// GameEngine - The main bridge between Godot and the M.A.X.R. C++ engine.
 ///
-/// Phase 2: Full data bridge. Exposes cModel, cMap, cPlayer, and cUnit data
-/// to GDScript via GameMap, GamePlayer, and GameUnit wrapper objects.
+/// Supports three modes:
+///   SINGLE_PLAYER - direct model manipulation (original behavior)
+///   HOST          - owns a cServer with authoritative model + lockstep timer
+///   CLIENT        - owns a cClient with local model synced from server
 class GameEngine : public Node {
     GDCLASS(GameEngine, Node)
 
+public:
+    enum NetworkMode { SINGLE_PLAYER = 0, HOST = 1, CLIENT = 2 };
+
 private:
     bool engine_initialized = false;
+    NetworkMode network_mode = SINGLE_PLAYER;
+
+    // Single-player: direct model ownership
     std::unique_ptr<cModel> model;
     std::shared_ptr<cUnitsData> unitsData;
+
+    // Multiplayer: server/client + shared connection manager
+    std::shared_ptr<cConnectionManager> connection_manager;
+    std::unique_ptr<cServer> server;    // HOST mode only
+    std::unique_ptr<cClient> client;    // CLIENT mode only (also created for HOST)
+
+    /// Returns the active cModel* regardless of mode.
+    cModel* get_active_model() const;
 
 protected:
     static void _bind_methods();
@@ -72,25 +92,104 @@ public:
     // --- Pathfinding (Phase 7) ---
     Ref<GamePathfinder> get_pathfinder() const;
 
-    // --- Game initialization (Phase 4) ---
+    // --- Data loading (Phase 8) ---
 
-    /// Start a quick test game: 64x64 map, 2 players, 150 credits each,
-    /// 4 starting units per player (Constructor, 2x Tank, Surveyor).
+    /// Load game data (vehicles, buildings, clans) from JSON files.
+    /// Safe to call multiple times - data is only loaded once.
+    /// Returns true if data loaded successfully.
+    bool load_game_data();
+
+    /// Get list of available map filenames from data/maps/
+    Array get_available_maps() const;
+
+    /// Get list of available clans (Array of Dictionaries with name, description, index)
+    Array get_available_clans() const;
+
+    /// Get info about loaded unit data (vehicle/building counts, names, etc.)
+    Dictionary get_unit_data_info() const;
+
+    // --- Phase 18: Pre-game setup data ---
+
+    /// Get all purchasable vehicle types for the unit purchase screen.
+    /// clan: -1 for base stats, 0-7 for clan-modified stats.
+    Array get_purchasable_vehicles(int clan) const;
+
+    /// Get free initial landing units for a given bridgehead type.
+    Array get_initial_landing_units(int clan, int start_credits, String bridgehead_type) const;
+
+    /// Get detailed clan info with stat modifications.
+    Array get_clan_details() const;
+
+    /// Check if a position is valid for landing on a given map.
+    bool check_landing_position(String map_name, Vector2i pos) const;
+
+    // --- Game initialization (Phase 4, updated Phase 8) ---
+
+    /// Start a quick test game using real data: first available map, 2 players,
+    /// 150 credits each, starting units from loaded data.
     /// Returns a Dictionary with game details on success.
     Dictionary new_game_test();
 
     /// Start a custom game with specified parameters.
+    /// map_name: String map filename (e.g. "Delta.wrl"), or "" for auto-select
     /// player_names: Array of String
     /// player_colors: Array of Color
-    /// map_size: int (power of 2, e.g. 32, 64, 128)
+    /// player_clans: Array of int (-1 = no clan, 0-7 = clan index)
     /// start_credits: int
     /// Returns a Dictionary with game details on success.
-    Dictionary new_game(Array player_names, Array player_colors, int map_size, int start_credits);
+    Dictionary new_game(String map_name, Array player_names, Array player_colors, Array player_clans, int start_credits);
+
+    /// Start a custom game with full game settings Dictionary.
+    /// See GameSetup::setup_custom_game_ex for the full list of keys.
+    /// Returns a Dictionary with game details on success.
+    Dictionary new_game_ex(Dictionary game_settings);
+
+    // --- Save/Load (Phase 13) ---
+
+    /// Save the current game to a slot (1-100). Returns true on success.
+    bool save_game(int slot, String save_name);
+
+    /// Load a game from a slot. Returns a Dictionary with game details on success.
+    Dictionary load_game(int slot);
+
+    /// Get a list of save game slots with info. Returns Array of Dictionaries.
+    /// Each dict: {slot, name, date, turn, map, players: [{name, id, defeated}]}
+    Array get_save_game_list();
+
+    /// Get info for a specific save slot. Returns a Dictionary (empty if slot not found).
+    Dictionary get_save_game_info(int slot);
+
+    // --- Networking (Phase 16) ---
+
+    /// Set up as host: creates cConnectionManager, cServer, cClient (local).
+    /// Called by GameLobby when the lobby transitions to a game.
+    /// port: TCP port the server listens on.
+    bool setup_as_host(int port);
+
+    /// Set up as client: receives a cConnectionManager and creates cClient.
+    /// Called by GameLobby when the lobby transitions to a game.
+    bool setup_as_client();
+
+    /// Accept the connection manager and server/client from a GameLobby.
+    /// This is the primary handoff mechanism from the lobby to the game.
+    void accept_lobby_handoff(std::shared_ptr<cConnectionManager> conn_mgr,
+                              std::unique_ptr<cServer> srv,
+                              std::unique_ptr<cClient> cli,
+                              NetworkMode mode);
+
+    /// Get the current network mode as a string: "single_player", "host", "client"
+    String get_network_mode() const;
+
+    /// Returns true if in HOST or CLIENT mode.
+    bool is_multiplayer() const;
+
+    /// Get the cClient pointer (for GameActions routing in multiplayer).
+    cClient* get_client() const;
 
     // --- Turn System & Game Loop (Phase 5) ---
 
     /// Advance game time by one tick (10ms of game time).
-    /// Processes move jobs, attack jobs, effects, and turn-end logic.
+    /// In multiplayer mode, this is a no-op (lockstep timer handles ticks).
     void advance_tick();
 
     /// Advance game time by N ticks.

@@ -23,6 +23,24 @@ public:
 	void saveInFile() const {}
 	bool isInitialized() const { return true; }
 
+	/// Set the base data directory. All other paths are derived from this.
+	/// Call this early (e.g. from GameEngine::initialize_engine()) with an
+	/// absolute path obtained from Godot's ProjectSettings.globalize_path("res://data").
+	void setDataDir(const std::filesystem::path& dir)
+	{
+		dataDir = dir;
+		mapsPath = dataDir / "maps";
+		fontPath = dataDir / "fonts";
+		fxPath = dataDir / "fx";
+		gfxPath = dataDir / "gfx";
+		soundsPath = dataDir / "sounds";
+		voicesPath = dataDir / "voices";
+		musicPath = dataDir / "music";
+		vehiclesPath = dataDir / "vehicles";
+		buildingsPath = dataDir / "buildings";
+		langPath = dataDir / "languages";
+	}
+
 	// Paths - return sensible defaults
 	const std::filesystem::path& getMapsPath() const { return mapsPath; }
 	const std::filesystem::path& getSavesPath() const { return savesPath; }

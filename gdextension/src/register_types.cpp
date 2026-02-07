@@ -7,6 +7,7 @@
 #include "game_actions.h"
 #include "game_setup.h"
 #include "game_pathfinder.h"
+#include "game_lobby.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
@@ -27,6 +28,7 @@ void initialize_maxtreme_module(ModuleInitializationLevel p_level) {
     ClassDB::register_class<GameActions>();
     ClassDB::register_class<GameSetup>();
     ClassDB::register_class<GamePathfinder>();
+    ClassDB::register_class<GameLobby>();
 }
 
 void uninitialize_maxtreme_module(ModuleInitializationLevel p_level) {

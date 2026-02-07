@@ -1,0 +1,1104 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-22 15:15+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+msgid "ChatCmd~Desc~AJobs"
+msgstr ""
+
+msgid "ChatCmd~Desc~Base"
+msgstr ""
+
+msgid "ChatCmd~Desc~CacheDebug"
+msgstr ""
+
+msgid "ChatCmd~Desc~CacheFlush"
+msgstr ""
+
+msgid "ChatCmd~Desc~CacheSize"
+msgstr ""
+
+msgid "ChatCmd~Desc~Crash"
+msgstr ""
+
+msgid "ChatCmd~Desc~Fx"
+msgstr ""
+
+msgid "ChatCmd~Desc~Help"
+msgstr ""
+
+msgid "ChatCmd~Desc~Pause"
+msgstr ""
+
+msgid "ChatCmd~Desc~Players"
+msgstr ""
+
+msgid "ChatCmd~Desc~Resume"
+msgstr ""
+
+msgid "ChatCmd~Desc~Sentry"
+msgstr ""
+
+msgid "ChatCmd~Desc~StealthDebug"
+msgstr ""
+
+msgid "ChatCmd~Desc~SyncDebug"
+msgstr ""
+
+msgid "ChatCmd~Desc~Trace"
+msgstr ""
+
+msgid "ChatCmd~Unknown_Command"
+msgstr ""
+
+msgid "Comp~Adjustments_Fuel_Decreased"
+msgstr ""
+
+msgid "Comp~Adjustments_Fuel_Increased"
+msgstr ""
+
+msgid "Comp~Adjustments_Gold_Decreased"
+msgstr ""
+
+msgid "Comp~Adjustments_Gold_Increased"
+msgstr ""
+
+msgid "Comp~Adjustments_Metal_Decreased"
+msgstr ""
+
+msgid "Comp~Adjustments_Metal_Increased"
+msgstr ""
+
+msgid "Comp~Attacked"
+msgstr ""
+
+msgid "Comp~AttackingEnemy"
+msgstr ""
+
+msgid "Comp~AttackingStatusStr"
+msgstr ""
+
+msgid "Comp~Building_Disabled"
+msgstr ""
+
+msgid "Comp~CapturedByEnemy"
+msgstr ""
+
+msgid "Comp~Clearing"
+msgstr ""
+
+msgid "Comp~Clearing_Fin"
+msgstr ""
+
+msgid "Comp~Clearing_Mine"
+msgstr ""
+
+msgid "Comp~CommandoRank_Average"
+msgstr ""
+
+msgid "Comp~CommandoRank_Elite"
+msgstr ""
+
+msgid "Comp~CommandoRank_Expert"
+msgstr ""
+
+msgid "Comp~CommandoRank_GrandMaster"
+msgstr ""
+
+msgid "Comp~CommandoRank_Greenhorn"
+msgstr ""
+
+msgid "Comp~CommandoRank_Veteran"
+msgstr ""
+
+msgid "Comp~Dated"
+msgstr ""
+
+msgid "Comp~Defeated"
+msgstr ""
+
+msgid "Comp~Description"
+msgstr ""
+
+msgid "Comp~Destroyed"
+msgstr ""
+
+msgid "Comp~Detected"
+msgstr ""
+
+msgid "Comp~Disabled"
+msgstr ""
+
+msgid "Comp~EcoSphere(s)"
+msgid_plural "Comp~EcoSphere(s)"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Comp~End_Game"
+msgstr ""
+
+msgid "Comp~Energy_Insufficient"
+msgstr ""
+
+msgid "Comp~Energy_IsNeeded"
+msgstr ""
+
+msgid "Comp~Energy_Low"
+msgstr ""
+
+msgid "Comp~Energy_ToLow"
+msgstr ""
+
+msgid "Comp~Fuel_Insufficient"
+msgstr ""
+
+msgid "Comp~Fuel_Low"
+msgstr ""
+
+msgid "Comp~GameEndsAt"
+msgstr ""
+
+msgid "Comp~Gold_Insufficient"
+msgstr ""
+
+msgid "Comp~Gold_Low"
+msgstr ""
+
+msgid "Comp~Is(Are)Finished"
+msgid_plural "Comp~Is(Are)Finished"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Comp~IsBeeingAttacked"
+msgstr ""
+
+msgid "Comp~Labs"
+msgstr ""
+
+msgid "Comp~Landing_Select"
+msgstr ""
+
+msgid "Comp~Landing_Too_Close"
+msgstr ""
+
+msgid "Comp~Landing_Warning"
+msgstr ""
+
+msgid "Comp~Laying"
+msgstr ""
+
+msgid "Comp~Metal_Insufficient"
+msgstr ""
+
+msgid "Comp~Metal_Low"
+msgstr ""
+
+msgid "Comp~Moving"
+msgstr ""
+
+msgid "Comp~MovingToAttack"
+msgstr ""
+
+msgid "Comp~NoLimit"
+msgstr ""
+
+msgid "Comp~Of_Type"
+msgstr ""
+
+msgid "Comp~Path_interrupted"
+msgstr ""
+
+msgid "Comp~Point(s)"
+msgid_plural "Comp~Point(s)"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Comp~Points"
+msgstr ""
+
+msgid "Comp~Producing"
+msgstr ""
+
+msgid "Comp~Producing_Fin"
+msgstr ""
+
+msgid "Comp~Producing_InsufficientMaterial"
+msgstr ""
+
+msgid "Comp~Producing_PositionBlocked"
+msgstr ""
+
+msgid "Comp~ReactionFireOff"
+msgstr ""
+
+msgid "Comp~Repeat"
+msgstr ""
+
+msgid "Comp~Research(s)_Finished"
+msgid_plural "Comp~Research(s)_Finished"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Comp~Reserve"
+msgstr ""
+
+msgid "Comp~RestartRequired"
+msgstr ""
+
+msgid "Comp~Screenshot_Done"
+msgstr ""
+
+msgid "Comp~Sentry"
+msgstr ""
+
+msgid "Comp~SuddenDeath"
+msgstr ""
+
+msgid "Comp~Surveying"
+msgstr ""
+
+msgid "Comp~Team_Insufficient"
+msgstr ""
+
+msgid "Comp~Team_Low"
+msgstr ""
+
+msgid "Comp~Themes"
+msgstr ""
+
+msgid "Comp~Turn(s)"
+msgid_plural "Comp~Turn(s)"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Comp~Turn_5"
+msgstr ""
+
+msgid "Comp~Turn_Automove"
+msgstr ""
+
+msgid "Comp~Turn_Start"
+msgstr ""
+
+msgid "Comp~Turn_Wait"
+msgstr ""
+
+msgid "Comp~Turns"
+msgstr ""
+
+msgid "Comp~Upgrade(s)_Done"
+msgid_plural "Comp~Upgrade(s)_Done"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Comp~Waits"
+msgstr ""
+
+msgid "Comp~Wins"
+msgstr ""
+
+msgid "Comp~Working"
+msgstr ""
+
+msgid "Error_Messages~ERROR_Map_Checksum"
+msgstr ""
+
+msgid "Error_Messages~ERROR_Map_Loading"
+msgstr ""
+
+msgid "Error_Messages~ERROR_Save_Incompatible"
+msgstr ""
+
+msgid "Error_Messages~ERROR_Save_Loading"
+msgstr ""
+
+msgid "Error_Messages~ERROR_Save_Writing"
+msgstr ""
+
+msgid "Error_Messages~INFO_Not_Implemented"
+msgstr ""
+
+msgid "Error_Messages~Invalid_Map"
+msgstr ""
+
+msgid "Error_Messages~Map_Not_Found"
+msgstr ""
+
+msgid "GameOver~BuiltBuildings"
+msgstr ""
+
+msgid "GameOver~BuiltMineStations"
+msgstr ""
+
+msgid "GameOver~BuiltUnits"
+msgstr ""
+
+msgid "GameOver~Builtfactories"
+msgstr ""
+
+msgid "GameOver~LostBuildings"
+msgstr ""
+
+msgid "GameOver~LostUnits"
+msgstr ""
+
+msgid "GamePreparation~Aborting?"
+msgstr ""
+
+msgid "Init~Buildings"
+msgstr ""
+
+msgid "Init~Clans"
+msgstr ""
+
+msgid "Init~Effects"
+msgstr ""
+
+msgid "Init~Fonts"
+msgstr ""
+
+msgid "Init~GFX"
+msgstr ""
+
+msgid "Init~Keys"
+msgstr ""
+
+msgid "Init~Music"
+msgstr ""
+
+msgid "Init~Sounds"
+msgstr ""
+
+msgid "Init~Vehicles"
+msgstr ""
+
+msgid "Init~Voices"
+msgstr ""
+
+msgid "Main~Credits_Reloaded"
+msgstr ""
+
+msgid "Main~Version"
+msgstr ""
+
+msgid "Multiplayer~Abort_Waiting"
+msgstr ""
+
+msgid "Multiplayer~Disconnect_Not_In_Save"
+msgstr ""
+
+msgid "Multiplayer~Gameversion_Error"
+msgstr ""
+
+msgid "Multiplayer~Gameversion_Own"
+msgstr ""
+
+msgid "Multiplayer~Gameversion_Warning_Client"
+msgstr ""
+
+msgid "Multiplayer~Gameversion_Warning_Server"
+msgstr ""
+
+msgid "Multiplayer~Host_command"
+msgstr ""
+
+msgid "Multiplayer~Lost_Connection"
+msgstr ""
+
+msgid "Multiplayer~MapDL_Cancel"
+msgstr ""
+
+msgid "Multiplayer~MapDL_Download"
+msgstr ""
+
+msgid "Multiplayer~MapDL_DownloadInvalid"
+msgstr ""
+
+msgid "Multiplayer~MapDL_DownloadRequest"
+msgstr ""
+
+msgid "Multiplayer~MapDL_DownloadRequestInvalid"
+msgstr ""
+
+msgid "Multiplayer~MapDL_Finished"
+msgstr ""
+
+msgid "Multiplayer~MapDL_Percent"
+msgstr ""
+
+msgid "Multiplayer~MapDL_Upload"
+msgstr ""
+
+msgid "Multiplayer~MapDL_UploadFinished"
+msgstr ""
+
+msgid "Multiplayer~Map_NoSet"
+msgstr ""
+
+msgid "Multiplayer~Missing_Host"
+msgstr ""
+
+msgid "Multiplayer~Missing_Player"
+msgstr ""
+
+msgid "Multiplayer~Missing_Settings"
+msgstr ""
+
+msgid "Multiplayer~Network_Connected"
+msgstr ""
+
+msgid "Multiplayer~Network_Connecting"
+msgstr ""
+
+msgid "Multiplayer~Network_Error_Connect"
+msgstr ""
+
+msgid "Multiplayer~Network_Error_Socket"
+msgstr ""
+
+msgid "Multiplayer~Network_Open"
+msgstr ""
+
+msgid "Multiplayer~No_Map_No_Ready"
+msgstr ""
+
+msgid "Multiplayer~No_Response"
+msgstr ""
+
+msgid "Multiplayer~Not_All_Player(s)_Ready"
+msgid_plural "Multiplayer~Not_All_Player(s)_Ready"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Multiplayer~Not_Ready"
+msgstr ""
+
+msgid "Multiplayer~Option_NoSet"
+msgstr ""
+
+msgid "Multiplayer~Pause"
+msgstr ""
+
+msgid "Multiplayer~Player1"
+msgstr ""
+
+msgid "Multiplayer~Player2"
+msgstr ""
+
+msgid "Multiplayer~Player3"
+msgstr ""
+
+msgid "Multiplayer~Player4"
+msgstr ""
+
+msgid "Multiplayer~Player5"
+msgstr ""
+
+msgid "Multiplayer~Player6"
+msgstr ""
+
+msgid "Multiplayer~Player7"
+msgstr ""
+
+msgid "Multiplayer~Player8"
+msgstr ""
+
+msgid "Multiplayer~Player_Color_Taken"
+msgstr ""
+
+msgid "Multiplayer~Player_Joined"
+msgstr ""
+
+msgid "Multiplayer~Player_Left"
+msgstr ""
+
+msgid "Multiplayer~Player_Left_Game_Preparation"
+msgstr ""
+
+msgid "Multiplayer~Player_Name_Taken"
+msgstr ""
+
+msgid "Multiplayer~Player_Turn"
+msgstr ""
+
+msgid "Multiplayer~Player_Turn_End"
+msgstr ""
+
+msgid "Multiplayer~Player_Wrong"
+msgstr ""
+
+msgid "Multiplayer~Reconnect"
+msgstr ""
+
+msgid "Multiplayer~Reconnect_Already_Connected"
+msgstr ""
+
+msgid "Multiplayer~Reconnect_Not_Part_Of_Game"
+msgstr ""
+
+msgid "Multiplayer~Save_Only_Host"
+msgstr ""
+
+msgid "Multiplayer~Server_Not_Running"
+msgstr ""
+
+msgid "Multiplayer~Wait_For_Server"
+msgstr ""
+
+msgid "Multiplayer~Wait_Reconnect"
+msgstr ""
+
+msgid "Multiplayer~Wait_TurnEnd"
+msgstr ""
+
+msgid "Multiplayer~Wait_Until"
+msgstr ""
+
+msgid "Option~Definite"
+msgstr ""
+
+msgid "Option~Dense"
+msgstr ""
+
+msgid "Option~High"
+msgstr ""
+
+msgid "Option~Limited"
+msgstr ""
+
+msgid "Option~Low"
+msgstr ""
+
+msgid "Option~Mobile"
+msgstr ""
+
+msgid "Option~More"
+msgstr ""
+
+msgid "Option~None"
+msgstr ""
+
+msgid "Option~Normal"
+msgstr ""
+
+msgid "Option~Off"
+msgstr ""
+
+msgid "Option~On"
+msgstr ""
+
+msgid "Option~Sparse"
+msgstr ""
+
+msgid "Option~TooMuch"
+msgstr ""
+
+msgid "Option~Type_HotSeat"
+msgstr ""
+
+msgid "Option~Type_Simu"
+msgstr ""
+
+msgid "Option~Type_Turns"
+msgstr ""
+
+msgid "Others~Active"
+msgstr ""
+
+msgid "Others~Active_7"
+msgstr ""
+
+msgid "Others~Air_Units"
+msgstr ""
+
+msgid "Others~Ammo"
+msgstr ""
+
+msgid "Others~Ammo_7"
+msgstr ""
+
+msgid "Others~Armor"
+msgstr ""
+
+msgid "Others~Armor_7"
+msgstr ""
+
+msgid "Others~Attack"
+msgstr ""
+
+msgid "Others~Attack_7"
+msgstr ""
+
+msgid "Others~Auto_7"
+msgstr ""
+
+msgid "Others~Back"
+msgstr ""
+
+msgid "Others~Build_7"
+msgstr ""
+
+msgid "Others~Buy"
+msgstr ""
+
+msgid "Others~Cancel"
+msgstr ""
+
+msgid "Others~Cargo_7"
+msgstr ""
+
+msgid "Others~Chat"
+msgstr ""
+
+msgid "Others~Clear_7"
+msgstr ""
+
+msgid "Others~Color"
+msgstr ""
+
+msgid "Others~Costs"
+msgstr ""
+
+msgid "Others~Damaged_Units"
+msgstr ""
+
+msgid "Others~Destroy_7"
+msgstr ""
+
+msgid "Others~Disable_7"
+msgstr ""
+
+msgid "Others~Disadvantages_8cut"
+msgstr ""
+
+msgid "Others~Distribution_7"
+msgstr ""
+
+msgid "Others~Done"
+msgstr ""
+
+msgid "Others~Done_7"
+msgstr ""
+
+msgid "Others~End"
+msgstr ""
+
+msgid "Others~Enter_7"
+msgstr ""
+
+msgid "Others~Exit"
+msgstr ""
+
+msgid "Others~Fight_Units"
+msgstr ""
+
+msgid "Others~Files"
+msgstr ""
+
+msgid "Others~Fog"
+msgstr ""
+
+msgid "Others~Game_Load"
+msgstr ""
+
+msgid "Others~Game_New"
+msgstr ""
+
+msgid "Others~Game_Options"
+msgstr ""
+
+msgid "Others~Grid"
+msgstr ""
+
+msgid "Others~Ground_Units"
+msgstr ""
+
+msgid "Others~Hitpoints"
+msgstr ""
+
+msgid "Others~Hitpoints_7"
+msgstr ""
+
+msgid "Others~Host_Start"
+msgstr ""
+
+msgid "Others~Hot"
+msgstr ""
+
+msgid "Others~HotSeat_Load"
+msgstr ""
+
+msgid "Others~HotSeat_New"
+msgstr ""
+
+msgid "Others~Included"
+msgstr ""
+
+msgid "Others~Info_7"
+msgstr ""
+
+msgid "Others~Limited_To"
+msgstr ""
+
+msgid "Others~Load"
+msgstr ""
+
+msgid "Others~Load_7"
+msgstr ""
+
+msgid "Others~Log"
+msgstr ""
+
+msgid "Others~Mani"
+msgstr ""
+
+msgid "Others~ManualFireMode_7"
+msgstr ""
+
+msgid "Others~Multi_Player"
+msgstr ""
+
+msgid "Others~No"
+msgstr ""
+
+msgid "Others~OK"
+msgstr ""
+
+msgid "Others~Path"
+msgstr ""
+
+msgid "Others~Power"
+msgstr ""
+
+msgid "Others~Proceed_4"
+msgstr ""
+
+msgid "Others~Produce_7"
+msgstr ""
+
+msgid "Others~Produce_Units"
+msgstr ""
+
+msgid "Others~Range"
+msgstr ""
+
+msgid "Others~Range_7"
+msgstr ""
+
+msgid "Others~Reload"
+msgstr ""
+
+msgid "Others~Reload_7"
+msgstr ""
+
+msgid "Others~Repair"
+msgstr ""
+
+msgid "Others~Repair_7"
+msgstr ""
+
+msgid "Others~Reports"
+msgstr ""
+
+msgid "Others~Research"
+msgstr ""
+
+msgid "Others~Save"
+msgstr ""
+
+msgid "Others~Scan"
+msgstr ""
+
+msgid "Others~Scan_7"
+msgstr ""
+
+msgid "Others~Score"
+msgstr ""
+
+msgid "Others~Sea_Units"
+msgstr ""
+
+msgid "Others~Seed"
+msgstr ""
+
+msgid "Others~Sentry"
+msgstr ""
+
+msgid "Others~Settings"
+msgstr ""
+
+msgid "Others~Shots"
+msgstr ""
+
+msgid "Others~Shots_7"
+msgstr ""
+
+msgid "Others~Single_Player"
+msgstr ""
+
+msgid "Others~Speed"
+msgstr ""
+
+msgid "Others~Speed_7"
+msgstr ""
+
+msgid "Others~Start_7"
+msgstr ""
+
+msgid "Others~Stationary_Units"
+msgstr ""
+
+msgid "Others~Status"
+msgstr ""
+
+msgid "Others~Steal_7"
+msgstr ""
+
+msgid "Others~Stealth_Units"
+msgstr ""
+
+msgid "Others~Stop_7"
+msgstr ""
+
+msgid "Others~Survey"
+msgstr ""
+
+msgid "Others~TCPIP_Client"
+msgstr ""
+
+msgid "Others~TCPIP_Host"
+msgstr ""
+
+msgid "Others~Teams_7"
+msgstr ""
+
+msgid "Others~Total"
+msgstr ""
+
+msgid "Others~Transfer_7"
+msgstr ""
+
+msgid "Others~Unit_destroyed"
+msgstr ""
+
+msgid "Others~Units"
+msgstr ""
+
+msgid "Others~Upgrade"
+msgstr ""
+
+msgid "Others~UpgradeAll_7"
+msgstr ""
+
+msgid "Others~Upgrademenu_7"
+msgstr ""
+
+msgid "Others~Upgradethis_7"
+msgstr ""
+
+msgid "Others~Usage_7"
+msgstr ""
+
+msgid "Others~Yes"
+msgstr ""
+
+msgid "Punctuation~Colon"
+msgstr ""
+
+msgid "Settings~3D"
+msgstr ""
+
+msgid "Settings~Alphaeffects"
+msgstr ""
+
+msgid "Settings~Animation"
+msgstr ""
+
+msgid "Settings~Autosave"
+msgstr ""
+
+msgid "Settings~Disable"
+msgstr ""
+
+msgid "Settings~Effects"
+msgstr ""
+
+msgid "Settings~Intro"
+msgstr ""
+
+msgid "Settings~Language"
+msgstr ""
+
+msgid "Settings~Music"
+msgstr ""
+
+msgid "Settings~Preferences"
+msgstr ""
+
+msgid "Settings~Resolution"
+msgstr ""
+
+msgid "Settings~Scrollspeed"
+msgstr ""
+
+msgid "Settings~Shadows"
+msgstr ""
+
+msgid "Settings~ShowDamage"
+msgstr ""
+
+msgid "Settings~ShowDamageVehicle"
+msgstr ""
+
+msgid "Settings~Tracks"
+msgstr ""
+
+msgid "Settings~Unlimited_11"
+msgstr ""
+
+msgid "Settings~Voices"
+msgstr ""
+
+msgid "Settings~Volume"
+msgstr ""
+
+msgid "Settings~Window"
+msgstr ""
+
+msgid "Title~Alien_Tech"
+msgstr ""
+
+msgid "Title~BridgeHead"
+msgstr ""
+
+msgid "Title~Build_Factory"
+msgstr ""
+
+msgid "Title~Build_Vehicle"
+msgstr ""
+
+msgid "Title~Cargo"
+msgstr ""
+
+msgid "Title~Choose_Clan"
+msgstr ""
+
+msgid "Title~Choose_Planet"
+msgstr ""
+
+msgid "Title~Choose_Units"
+msgstr ""
+
+msgid "Title~Clans"
+msgstr ""
+
+msgid "Title~Color"
+msgstr ""
+
+msgid "Title~Computer"
+msgstr ""
+
+msgid "Title~Connect"
+msgstr ""
+
+msgid "Title~Credits"
+msgstr ""
+
+msgid "Title~Credits_start"
+msgstr ""
+
+msgid "Title~Custom_11"
+msgstr ""
+
+msgid "Title~GameOver"
+msgstr ""
+
+msgid "Title~Game_Type"
+msgstr ""
+
+msgid "Title~Gold"
+msgstr ""
+
+msgid "Title~HotSeat"
+msgstr ""
+
+msgid "Title~Human"
+msgstr ""
+
+msgid "Title~IP"
+msgstr ""
+
+msgid "Title~Labs"
+msgstr ""
+
+msgid "Title~Load"
+msgstr ""
+
+msgid "Title~MainMenu"
+msgstr ""
+
+msgid "Title~Map"
+msgstr ""
+
+msgid "Title~Metal"
+msgstr ""
+
+msgid "Title~Mine"
+msgstr ""
+
+msgid "Title~Nobody"
+msgstr ""
+
+msgid "Title~Oil"
+msgstr ""
+
+msgid "Title~Options"
+msgstr ""
+
+msgid "Title~Player_Name"
+msgstr ""
+
+msgid "Title~Players"
+msgstr ""
+
+msgid "Title~Port"
+msgstr ""
+
+msgid "Title~Resource_Density"
+msgstr ""
+
+msgid "Title~Savegame"
+msgstr ""
+
+msgid "Title~Send"
+msgstr ""
+
+msgid "Title~Team"
+msgstr ""
+
+msgid "Title~Turn_end"
+msgstr ""
+
+msgid "Title~Turn_limit"
+msgstr ""
+
+msgid "Title~Unitinfo"
+msgstr ""
+
+msgid "Title~Upgrades_Menu"
+msgstr ""

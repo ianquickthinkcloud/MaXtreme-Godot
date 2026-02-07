@@ -16,6 +16,12 @@ bin/*.so
 bin/*.dylib
 bin/*.pdb
 
+# Generated PNGs from PCX converter (regenerate with tools/convert_pcx_to_png.py)
+data/**/*.png
+
+# Python virtual environment
+tools/.venv/
+
 # OS
 .DS_Store
 Thumbs.db

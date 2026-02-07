@@ -65,6 +65,7 @@ maxr_dirs = [
     "src/maxr/game/protocol",
     "src/maxr/game/startup",
     "src/maxr/game",
+    "src/maxr/resources",
     "src/maxr/utility",
     "src/maxr/utility/serialization",
     "src/maxr/utility/signal",

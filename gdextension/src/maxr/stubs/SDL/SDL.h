@@ -28,20 +28,76 @@ inline Uint32 SDL_GetTicks() {
 }
 
 // --- SDL Timer callback type ---
+// Callback returns the new interval for the next invocation.
+// If it returns 0, the timer is cancelled (one-shot).
 using SDL_TimerCallback = Uint32 (*)(Uint32 interval, void* param);
 
-// SDL_AddTimer replacement - starts a std::thread that calls callback periodically
-// Returns a fake timer ID > 0
+#include <map>
+#include <mutex>
+#include <atomic>
+
+/// Internal state for an active SDL timer.
+struct _SDLTimerState {
+    std::thread thread;
+    std::atomic<bool> active{true};
+};
+
+/// Global registry of active timers (protected by mutex).
+struct _SDLTimerRegistry {
+    std::mutex mutex;
+    std::map<SDL_TimerID, std::unique_ptr<_SDLTimerState>> timers;
+    int next_id = 1;
+
+    static _SDLTimerRegistry& instance() {
+        static _SDLTimerRegistry reg;
+        return reg;
+    }
+};
+
+/// SDL_AddTimer replacement -- spawns a detached std::thread that calls the
+/// callback at the requested interval. If the callback returns 0, the timer
+/// stops (one-shot). If it returns a positive value, the timer repeats with
+/// that new interval.
 inline SDL_TimerID SDL_AddTimer(Uint32 interval, SDL_TimerCallback callback, void* param) {
-    static int next_id = 1;
-    int id = next_id++;
-    // Note: In the real implementation, the game timer will be reworked.
-    // This stub just returns a valid ID so the code compiles.
+    auto& reg = _SDLTimerRegistry::instance();
+    std::lock_guard<std::mutex> lock(reg.mutex);
+
+    int id = reg.next_id++;
+    auto state = std::make_unique<_SDLTimerState>();
+    auto* state_ptr = state.get();
+
+    state->thread = std::thread([state_ptr, interval, callback, param]() {
+        Uint32 current_interval = interval;
+        while (state_ptr->active.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(current_interval));
+            if (!state_ptr->active.load()) break;
+
+            Uint32 next_interval = callback(current_interval, param);
+            if (next_interval == 0) {
+                // One-shot timer: callback returned 0, stop
+                state_ptr->active.store(false);
+                break;
+            }
+            current_interval = next_interval;
+        }
+    });
+    state->thread.detach();
+
+    reg.timers[id] = std::move(state);
     return id;
 }
 
+/// SDL_RemoveTimer -- signals the timer thread to stop.
 inline bool SDL_RemoveTimer(SDL_TimerID id) {
-    // Stub - timer management will be reworked for Godot
+    auto& reg = _SDLTimerRegistry::instance();
+    std::lock_guard<std::mutex> lock(reg.mutex);
+
+    auto it = reg.timers.find(id);
+    if (it == reg.timers.end()) return false;
+
+    it->second->active.store(false);
+    // Thread is detached, will exit on its own
+    reg.timers.erase(it);
     return true;
 }
 

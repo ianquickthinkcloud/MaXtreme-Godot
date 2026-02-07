@@ -1,8 +1,13 @@
 #include "game_player.h"
 
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 
 #include "game/data/player/player.h"
+#include "game/data/base/base.h"
+#include "game/data/miningresource.h"
+#include "game/data/rangemap.h"
+#include "game/logic/upgradecalculator.h"
 
 using namespace godot;
 
@@ -33,6 +38,29 @@ void GamePlayer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_lost_vehicles_count"), &GamePlayer::get_lost_vehicles_count);
     ClassDB::bind_method(D_METHOD("get_built_buildings_count"), &GamePlayer::get_built_buildings_count);
     ClassDB::bind_method(D_METHOD("get_lost_buildings_count"), &GamePlayer::get_lost_buildings_count);
+
+    // Base resource storage (Phase 8)
+    ClassDB::bind_method(D_METHOD("get_resource_storage"), &GamePlayer::get_resource_storage);
+    ClassDB::bind_method(D_METHOD("get_resource_production"), &GamePlayer::get_resource_production);
+    ClassDB::bind_method(D_METHOD("get_resource_needed"), &GamePlayer::get_resource_needed);
+
+    // Energy balance
+    ClassDB::bind_method(D_METHOD("get_energy_balance"), &GamePlayer::get_energy_balance);
+
+    // Human balance
+    ClassDB::bind_method(D_METHOD("get_human_balance"), &GamePlayer::get_human_balance);
+
+    // Research state
+    ClassDB::bind_method(D_METHOD("get_research_levels"), &GamePlayer::get_research_levels);
+    ClassDB::bind_method(D_METHOD("get_research_centers_per_area"), &GamePlayer::get_research_centers_per_area);
+
+    // Economy summary
+    ClassDB::bind_method(D_METHOD("get_economy_summary"), &GamePlayer::get_economy_summary);
+
+    // Fog of War / Visibility (Phase 14)
+    ClassDB::bind_method(D_METHOD("can_see_at", "pos"), &GamePlayer::can_see_at);
+    ClassDB::bind_method(D_METHOD("get_scan_map_data"), &GamePlayer::get_scan_map_data);
+    ClassDB::bind_method(D_METHOD("get_scan_map_size"), &GamePlayer::get_scan_map_size);
 }
 
 GamePlayer::GamePlayer() {}
@@ -128,4 +156,225 @@ int GamePlayer::get_built_buildings_count() const {
 int GamePlayer::get_lost_buildings_count() const {
     if (!player) return 0;
     return static_cast<int>(player->getGameOverStat().lostBuildingsCount);
+}
+
+// ========== BASE RESOURCE STORAGE (Phase 8) ==========
+
+Dictionary GamePlayer::get_resource_storage() const {
+    Dictionary result;
+    result["metal"] = 0;
+    result["oil"] = 0;
+    result["gold"] = 0;
+    result["metal_max"] = 0;
+    result["oil_max"] = 0;
+    result["gold_max"] = 0;
+    if (!player) return result;
+
+    int metal = 0, oil = 0, gold = 0;
+    int metalMax = 0, oilMax = 0, goldMax = 0;
+
+    for (const auto& sb : player->base.SubBases) {
+        const auto& stored = sb->getResourcesStored();
+        const auto& maxStored = sb->getMaxResourcesStored();
+        metal += stored.metal;
+        oil += stored.oil;
+        gold += stored.gold;
+        metalMax += maxStored.metal;
+        oilMax += maxStored.oil;
+        goldMax += maxStored.gold;
+    }
+
+    result["metal"] = metal;
+    result["oil"] = oil;
+    result["gold"] = gold;
+    result["metal_max"] = metalMax;
+    result["oil_max"] = oilMax;
+    result["gold_max"] = goldMax;
+    return result;
+}
+
+Dictionary GamePlayer::get_resource_production() const {
+    Dictionary result;
+    result["metal"] = 0;
+    result["oil"] = 0;
+    result["gold"] = 0;
+    if (!player) return result;
+
+    int metal = 0, oil = 0, gold = 0;
+
+    for (const auto& sb : player->base.SubBases) {
+        const auto& prod = sb->getProd();
+        metal += prod.metal;
+        oil += prod.oil;
+        gold += prod.gold;
+    }
+
+    result["metal"] = metal;
+    result["oil"] = oil;
+    result["gold"] = gold;
+    return result;
+}
+
+Dictionary GamePlayer::get_resource_needed() const {
+    Dictionary result;
+    result["metal"] = 0;
+    result["oil"] = 0;
+    result["gold"] = 0;
+    if (!player) return result;
+
+    int metal = 0, oil = 0, gold = 0;
+
+    for (const auto& sb : player->base.SubBases) {
+        const auto& needed = sb->getResourcesNeeded();
+        metal += needed.metal;
+        oil += needed.oil;
+        gold += needed.gold;
+    }
+
+    result["metal"] = metal;
+    result["oil"] = oil;
+    result["gold"] = gold;
+    return result;
+}
+
+// ========== ENERGY BALANCE ==========
+
+Dictionary GamePlayer::get_energy_balance() const {
+    Dictionary result;
+    result["production"] = 0;
+    result["need"] = 0;
+    result["max_production"] = 0;
+    result["max_need"] = 0;
+    if (!player) return result;
+
+    int prod = 0, need = 0, maxProd = 0, maxNeed = 0;
+
+    for (const auto& sb : player->base.SubBases) {
+        prod += sb->getEnergyProd();
+        need += sb->getEnergyNeed();
+        maxProd += sb->getMaxEnergyProd();
+        maxNeed += sb->getMaxEnergyNeed();
+    }
+
+    result["production"] = prod;
+    result["need"] = need;
+    result["max_production"] = maxProd;
+    result["max_need"] = maxNeed;
+    return result;
+}
+
+// ========== HUMAN BALANCE ==========
+
+Dictionary GamePlayer::get_human_balance() const {
+    Dictionary result;
+    result["production"] = 0;
+    result["need"] = 0;
+    result["max_need"] = 0;
+    if (!player) return result;
+
+    int prod = 0, need = 0, maxNeed = 0;
+
+    for (const auto& sb : player->base.SubBases) {
+        prod += sb->getHumanProd();
+        need += sb->getHumanNeed();
+        maxNeed += sb->getMaxHumanNeed();
+    }
+
+    result["production"] = prod;
+    result["need"] = need;
+    result["max_need"] = maxNeed;
+    return result;
+}
+
+// ========== RESEARCH STATE ==========
+
+Dictionary GamePlayer::get_research_levels() const {
+    Dictionary result;
+    result["attack"] = 0;
+    result["shots"] = 0;
+    result["range"] = 0;
+    result["armor"] = 0;
+    result["hitpoints"] = 0;
+    result["speed"] = 0;
+    result["scan"] = 0;
+    result["cost"] = 0;
+    if (!player) return result;
+
+    const auto& research = player->getResearchState();
+    result["attack"] = research.getCurResearchLevel(cResearch::eResearchArea::AttackResearch);
+    result["shots"] = research.getCurResearchLevel(cResearch::eResearchArea::ShotsResearch);
+    result["range"] = research.getCurResearchLevel(cResearch::eResearchArea::RangeResearch);
+    result["armor"] = research.getCurResearchLevel(cResearch::eResearchArea::ArmorResearch);
+    result["hitpoints"] = research.getCurResearchLevel(cResearch::eResearchArea::HitpointsResearch);
+    result["speed"] = research.getCurResearchLevel(cResearch::eResearchArea::SpeedResearch);
+    result["scan"] = research.getCurResearchLevel(cResearch::eResearchArea::ScanResearch);
+    result["cost"] = research.getCurResearchLevel(cResearch::eResearchArea::CostResearch);
+    return result;
+}
+
+Array GamePlayer::get_research_centers_per_area() const {
+    Array result;
+    for (int i = 0; i < 8; ++i) result.push_back(0);
+    if (!player) return result;
+
+    result[0] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::AttackResearch);
+    result[1] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::ShotsResearch);
+    result[2] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::RangeResearch);
+    result[3] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::ArmorResearch);
+    result[4] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::HitpointsResearch);
+    result[5] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::SpeedResearch);
+    result[6] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::ScanResearch);
+    result[7] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::CostResearch);
+    return result;
+}
+
+// ========== ECONOMY SUMMARY ==========
+
+Dictionary GamePlayer::get_economy_summary() const {
+    Dictionary result;
+    result["credits"] = get_credits();
+    result["resources"] = get_resource_storage();
+    result["production"] = get_resource_production();
+    result["needed"] = get_resource_needed();
+    result["energy"] = get_energy_balance();
+    result["humans"] = get_human_balance();
+    result["research"] = get_research_levels();
+    return result;
+}
+
+// ========== FOG OF WAR / VISIBILITY (Phase 14) ==========
+
+bool GamePlayer::can_see_at(Vector2i pos) const {
+    if (!player) return false;
+    return player->canSeeAt(cPosition(pos.x, pos.y));
+}
+
+PackedInt32Array GamePlayer::get_scan_map_data() const {
+    PackedInt32Array result;
+    if (!player) return result;
+
+    const auto& scanMap = player->getScanMap();
+    auto raw = scanMap.getMap();
+    result.resize(static_cast<int>(raw.size()));
+    for (size_t i = 0; i < raw.size(); i++) {
+        result[static_cast<int>(i)] = static_cast<int32_t>(raw[i]);
+    }
+    return result;
+}
+
+Vector2i GamePlayer::get_scan_map_size() const {
+    if (!player) return Vector2i(0, 0);
+    // The scan map size matches the game map size.
+    // We can get it from the scan map data length and map width.
+    const auto& scanMap = player->getScanMap();
+    auto raw = scanMap.getMap();
+    if (raw.empty()) return Vector2i(0, 0);
+
+    // We need the map dimensions. The scan map is resized to match the map.
+    // Since we don't have direct access to map here, we infer from the player's first unit
+    // or we can use a simpler approach: the scan map stores size internally.
+    // Actually, let's just return the data size and let GDScript use the map dimensions.
+    // For convenience, we compute sqrt if it's square, otherwise GDScript uses map.get_size().
+    int total = static_cast<int>(raw.size());
+    return Vector2i(total, 1);  // GDScript should use game_map.get_size() for proper w/h
 }

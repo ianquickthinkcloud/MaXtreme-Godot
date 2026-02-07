@@ -2,7 +2,8 @@
 
 #include <godot_cpp/variant/utility_functions.hpp>
 
-// M.A.X.R. action includes
+// M.A.X.R. core includes
+#include "game/logic/client.h"
 #include "game/data/model.h"
 #include "game/data/map/map.h"
 #include "game/data/player/player.h"
@@ -99,6 +100,10 @@ void GameActions::set_internal_model(cModel* m) {
     model = m;
 }
 
+void GameActions::set_internal_client(cClient* c) {
+    client = c;
+}
+
 // ========== HELPERS ==========
 
 cUnit* GameActions::find_unit(int unit_id) const {
@@ -161,9 +166,12 @@ bool GameActions::move_unit(int unit_id, PackedVector2Array path) {
     }
 
     try {
-        cActionStartMove action(*vehicle, cpath, eStart::Immediate, eStopOn::Never, cEndMoveAction::None());
-        action.execute(*model);
-        UtilityFunctions::print("[MaXtreme] move_unit: vehicle ", unit_id, " moving");
+        if (client) {
+            client->startMove(*vehicle, cpath, eStart::Immediate, eStopOn::Never, cEndMoveAction::None());
+        } else {
+            cActionStartMove action(*vehicle, cpath, eStart::Immediate, eStopOn::Never, cEndMoveAction::None());
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] move_unit failed: ", e.what());
@@ -177,8 +185,12 @@ bool GameActions::resume_move(int unit_id) {
     if (!vehicle) return false;
 
     try {
-        cActionResumeMove action(*vehicle);
-        action.execute(*model);
+        if (client) {
+            client->resumeMoveJob(*vehicle);
+        } else {
+            cActionResumeMove action(*vehicle);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] resume_move failed: ", e.what());
@@ -192,8 +204,12 @@ bool GameActions::set_auto_move(int unit_id, bool enabled) {
     if (!vehicle) return false;
 
     try {
-        cActionSetAutoMove action(*vehicle, enabled);
-        action.execute(*model);
+        if (client) {
+            client->setAutoMove(*vehicle, enabled);
+        } else {
+            cActionSetAutoMove action(*vehicle, enabled);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] set_auto_move failed: ", e.what());
@@ -215,9 +231,12 @@ bool GameActions::attack(int attacker_id, Vector2i target_pos, int target_unit_i
     cUnit* target = (target_unit_id >= 0) ? find_unit(target_unit_id) : nullptr;
 
     try {
-        cActionAttack action(*aggressor, targetPosition, target);
-        action.execute(*model);
-        UtilityFunctions::print("[MaXtreme] attack: unit ", attacker_id, " attacks at (", target_pos.x, ",", target_pos.y, ")");
+        if (client) {
+            client->attack(*aggressor, targetPosition, target);
+        } else {
+            cActionAttack action(*aggressor, targetPosition, target);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] attack failed: ", e.what());
@@ -231,8 +250,12 @@ bool GameActions::toggle_sentry(int unit_id) {
     if (!unit) return false;
 
     try {
-        cActionChangeSentry action(*unit);
-        action.execute(*model);
+        if (client) {
+            client->changeSentry(*unit);
+        } else {
+            cActionChangeSentry action(*unit);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] toggle_sentry failed: ", e.what());
@@ -246,8 +269,12 @@ bool GameActions::toggle_manual_fire(int unit_id) {
     if (!unit) return false;
 
     try {
-        cActionChangeManualFire action(*unit);
-        action.execute(*model);
+        if (client) {
+            client->changeManualFire(*unit);
+        } else {
+            cActionChangeManualFire action(*unit);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] toggle_manual_fire failed: ", e.what());
@@ -261,8 +288,13 @@ bool GameActions::set_minelayer_status(int unit_id, bool lay_mines, bool clear_m
     if (!vehicle) return false;
 
     try {
-        cActionMinelayerStatus action(*vehicle, lay_mines, clear_mines);
-        action.execute(*model);
+        if (client) {
+            if (lay_mines) client->toggleLayMines(*vehicle);
+            if (clear_mines) client->toggleCollectMines(*vehicle);
+        } else {
+            cActionMinelayerStatus action(*vehicle, lay_mines, clear_mines);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] set_minelayer_status failed: ", e.what());
@@ -292,9 +324,12 @@ bool GameActions::start_build(int vehicle_id, String building_type_id, int build
     cPosition buildPosition(build_pos.x, build_pos.y);
 
     try {
-        cActionStartBuild action(*vehicle, buildingID, build_speed, buildPosition);
-        action.execute(*model);
-        UtilityFunctions::print("[MaXtreme] start_build: vehicle ", vehicle_id, " building at (", build_pos.x, ",", build_pos.y, ")");
+        if (client) {
+            client->startBuild(*vehicle, buildingID, build_speed, buildPosition);
+        } else {
+            cActionStartBuild action(*vehicle, buildingID, build_speed, buildPosition);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] start_build failed: ", e.what());
@@ -308,8 +343,12 @@ bool GameActions::finish_build(int unit_id, Vector2i escape_pos) {
     if (!unit) return false;
 
     try {
-        cActionFinishBuild action(*unit, cPosition(escape_pos.x, escape_pos.y));
-        action.execute(*model);
+        if (client) {
+            client->finishBuild(*unit, cPosition(escape_pos.x, escape_pos.y));
+        } else {
+            cActionFinishBuild action(*unit, cPosition(escape_pos.x, escape_pos.y));
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] finish_build failed: ", e.what());
@@ -336,8 +375,12 @@ bool GameActions::change_build_list(int building_id, Array build_list, int build
     }
 
     try {
-        cActionChangeBuildList action(*building, idList, build_speed, repeat);
-        action.execute(*model);
+        if (client) {
+            client->changeBuildList(*building, idList, build_speed, repeat);
+        } else {
+            cActionChangeBuildList action(*building, idList, build_speed, repeat);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] change_build_list failed: ", e.what());
@@ -349,13 +392,16 @@ bool GameActions::change_build_list(int building_id, Array build_list, int build
 
 bool GameActions::start_work(int unit_id) {
     if (!model) return false;
-    auto* unit = find_unit(unit_id);
-    if (!unit) return false;
+    auto* building = find_building(unit_id);
+    if (!building) return false;
 
     try {
-        cActionStartWork action(*unit);
-        action.execute(*model);
-        UtilityFunctions::print("[MaXtreme] start_work: unit ", unit_id);
+        if (client) {
+            client->startWork(*building);
+        } else {
+            cActionStartWork action(*static_cast<cUnit*>(building));
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] start_work failed: ", e.what());
@@ -369,8 +415,12 @@ bool GameActions::stop(int unit_id) {
     if (!unit) return false;
 
     try {
-        cActionStop action(*unit);
-        action.execute(*model);
+        if (client) {
+            client->stopWork(*unit);
+        } else {
+            cActionStop action(*unit);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] stop failed: ", e.what());
@@ -389,8 +439,12 @@ bool GameActions::set_resource_distribution(int building_id, int metal, int oil,
     res.gold = gold;
 
     try {
-        cActionResourceDistribution action(*building, res);
-        action.execute(*model);
+        if (client) {
+            client->changeResourceDistribution(*building, res);
+        } else {
+            cActionResourceDistribution action(*building, res);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] set_resource_distribution failed: ", e.what());
@@ -407,8 +461,12 @@ bool GameActions::change_research(Array areas) {
     }
 
     try {
-        cActionChangeResearch action(researchAreas);
-        action.execute(*model);
+        if (client) {
+            client->changeResearch(researchAreas);
+        } else {
+            cActionChangeResearch action(researchAreas);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] change_research failed: ", e.what());
@@ -431,8 +489,12 @@ bool GameActions::transfer_resources(int source_id, int dest_id, int amount, Str
     else if (rt == "gold") resType = eResourceType::Gold;
 
     try {
-        cActionTransfer action(*source, *dest, amount, resType);
-        action.execute(*model);
+        if (client) {
+            client->transfer(*source, *dest, amount, resType);
+        } else {
+            cActionTransfer action(*source, *dest, amount, resType);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] transfer_resources failed: ", e.what());
@@ -447,8 +509,12 @@ bool GameActions::load_unit(int loader_id, int vehicle_id) {
     if (!loader || !vehicle) return false;
 
     try {
-        cActionLoad action(*loader, *vehicle);
-        action.execute(*model);
+        if (client) {
+            client->load(*loader, *vehicle);
+        } else {
+            cActionLoad action(*loader, *vehicle);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] load_unit failed: ", e.what());
@@ -463,8 +529,12 @@ bool GameActions::activate_unit(int container_id, int vehicle_id, Vector2i posit
     if (!container || !vehicle) return false;
 
     try {
-        cActionActivate action(*container, *vehicle, cPosition(position.x, position.y));
-        action.execute(*model);
+        if (client) {
+            client->activateUnit(*container, *vehicle, cPosition(position.x, position.y));
+        } else {
+            cActionActivate action(*container, *vehicle, cPosition(position.x, position.y));
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] activate_unit failed: ", e.what());
@@ -483,8 +553,13 @@ bool GameActions::repair_reload(int source_id, int target_id, String supply_type
     if (s == "repair") st = eSupplyType::REPAIR;
 
     try {
-        cActionRepairReload action(*source, *target, st);
-        action.execute(*model);
+        if (client) {
+            if (st == eSupplyType::REPAIR) client->repair(*source, *target);
+            else client->rearm(*source, *target);
+        } else {
+            cActionRepairReload action(*source, *target, st);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] repair_reload failed: ", e.what());
@@ -494,15 +569,20 @@ bool GameActions::repair_reload(int source_id, int target_id, String supply_type
 
 // ========== SPECIAL ==========
 
-bool GameActions::steal_disable(int infiltrator_id, int target_id, bool steal) {
+bool GameActions::steal_disable(int infiltrator_id, int target_id, bool steal_action) {
     if (!model) return false;
     auto* infiltrator = find_vehicle(infiltrator_id);
     auto* target = find_unit(target_id);
     if (!infiltrator || !target) return false;
 
     try {
-        cActionStealDisable action(*infiltrator, *target, steal);
-        action.execute(*model);
+        if (client) {
+            if (steal_action) client->steal(*infiltrator, *target);
+            else client->disable(*infiltrator, *target);
+        } else {
+            cActionStealDisable action(*infiltrator, *target, steal_action);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] steal_disable failed: ", e.what());
@@ -516,8 +596,12 @@ bool GameActions::clear_area(int vehicle_id) {
     if (!vehicle) return false;
 
     try {
-        cActionClear action(*vehicle);
-        action.execute(*model);
+        if (client) {
+            client->startClearRubbles(*vehicle);
+        } else {
+            cActionClear action(*vehicle);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] clear_area failed: ", e.what());
@@ -531,8 +615,12 @@ bool GameActions::self_destroy(int building_id) {
     if (!building) return false;
 
     try {
-        cActionSelfDestroy action(*building);
-        action.execute(*model);
+        if (client) {
+            client->selfDestroy(*building);
+        } else {
+            cActionSelfDestroy action(*building);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] self_destroy failed: ", e.what());
@@ -547,8 +635,12 @@ bool GameActions::rename_unit(int unit_id, String new_name) {
 
     std::string name = new_name.utf8().get_data();
     try {
-        cActionChangeUnitName action(*unit, std::move(name));
-        action.execute(*model);
+        if (client) {
+            client->changeUnitName(*unit, std::move(name));
+        } else {
+            cActionChangeUnitName action(*unit, std::move(name));
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] rename_unit failed: ", e.what());
@@ -564,8 +656,13 @@ bool GameActions::upgrade_vehicle(int building_id, int vehicle_id) {
     cVehicle* vehicle = (vehicle_id >= 0) ? find_vehicle(vehicle_id) : nullptr;
 
     try {
-        cActionUpgradeVehicle action(*building, vehicle);
-        action.execute(*model);
+        if (client) {
+            if (vehicle) client->upgradeVehicle(*building, *vehicle);
+            else client->upgradeAllVehicles(*building);
+        } else {
+            cActionUpgradeVehicle action(*building, vehicle);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] upgrade_vehicle failed: ", e.what());
@@ -579,8 +676,13 @@ bool GameActions::upgrade_building(int building_id, bool all) {
     if (!building) return false;
 
     try {
-        cActionUpgradeBuilding action(*building, all);
-        action.execute(*model);
+        if (client) {
+            if (all) client->upgradeAllBuildings(*building);
+            else client->upgradeBuilding(*building);
+        } else {
+            cActionUpgradeBuilding action(*building, all);
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] upgrade_building failed: ", e.what());
@@ -594,9 +696,12 @@ bool GameActions::end_turn() {
     if (!model) return false;
 
     try {
-        cActionEndTurn action;
-        action.execute(*model);
-        UtilityFunctions::print("[MaXtreme] end_turn executed");
+        if (client) {
+            client->endTurn();
+        } else {
+            cActionEndTurn action;
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] end_turn failed: ", e.what());
@@ -608,9 +713,12 @@ bool GameActions::start_turn() {
     if (!model) return false;
 
     try {
-        cActionStartTurn action;
-        action.execute(*model);
-        UtilityFunctions::print("[MaXtreme] start_turn executed");
+        if (client) {
+            client->startTurn();
+        } else {
+            cActionStartTurn action;
+            action.execute(*model);
+        }
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] start_turn failed: ", e.what());

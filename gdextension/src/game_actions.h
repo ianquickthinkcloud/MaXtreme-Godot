@@ -11,6 +11,7 @@
 #include <memory>
 
 class cModel;
+class cClient;
 class cUnit;
 class cVehicle;
 class cBuilding;
@@ -33,7 +34,8 @@ class GameActions : public RefCounted {
     GDCLASS(GameActions, RefCounted)
 
 private:
-    cModel* model = nullptr;  // Non-owning: lifetime managed by GameEngine
+    cModel* model = nullptr;    // Non-owning: lifetime managed by GameEngine
+    cClient* client = nullptr;  // Non-owning: set in multiplayer mode for action routing
 
     // Helper: find a unit across all players
     cUnit* find_unit(int unit_id) const;
@@ -50,6 +52,10 @@ public:
 
     // Internal: bind to the model (called from C++ only)
     void set_internal_model(cModel* m);
+
+    // Internal: bind to the cClient for multiplayer action routing.
+    // When client is set, actions route through the network instead of executing locally.
+    void set_internal_client(cClient* c);
 
     // ========== MOVEMENT ==========
 
