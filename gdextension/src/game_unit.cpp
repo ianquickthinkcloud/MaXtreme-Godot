@@ -6,6 +6,7 @@
 #include "game/data/units/vehicle.h"
 #include "game/data/units/building.h"
 #include "game/data/units/unitdata.h"
+#include "game/data/units/commandodata.h"
 #include "game/data/units/id.h"
 #include "game/data/player/player.h"
 #include "game/data/base/base.h"
@@ -79,6 +80,12 @@ void GameUnit::_bind_methods() {
 
     // Full stats
     ClassDB::bind_method(D_METHOD("get_stats"), &GameUnit::get_stats);
+
+    // Experience & version (Phase 20)
+    ClassDB::bind_method(D_METHOD("get_commando_rank"), &GameUnit::get_commando_rank);
+    ClassDB::bind_method(D_METHOD("get_commando_rank_name"), &GameUnit::get_commando_rank_name);
+    ClassDB::bind_method(D_METHOD("is_dated"), &GameUnit::is_dated);
+    ClassDB::bind_method(D_METHOD("get_version"), &GameUnit::get_version);
 
     // Capabilities & cargo
     ClassDB::bind_method(D_METHOD("get_capabilities"), &GameUnit::get_capabilities);
@@ -619,6 +626,40 @@ int GameUnit::get_energy_production() const {
 int GameUnit::get_energy_need() const {
     if (!unit) return 0;
     return unit->getStaticUnitData().needsEnergy;
+}
+
+// ========== EXPERIENCE & VERSION (Phase 20) ==========
+
+int GameUnit::get_commando_rank() const {
+    auto* v = as_vehicle();
+    if (!v) return -1;
+    // Only commandos (units with canCapture or canDisable) have ranks
+    if (!v->getStaticUnitData().vehicleData.canCapture &&
+        !v->getStaticUnitData().vehicleData.canDisable) return -1;
+    return cCommandoData::getLevel(v->getCommandoData().getSuccessCount());
+}
+
+String GameUnit::get_commando_rank_name() const {
+    int rank = get_commando_rank();
+    if (rank < 0) return String("");
+    // Rank names from the original game
+    static const char* rank_names[] = {
+        "Greenhorn", "Average", "Veteran", "Expert", "Elite", "Grand Master"
+    };
+    int idx = std::min(rank, 5);
+    return String(rank_names[idx]);
+}
+
+bool GameUnit::is_dated() const {
+    if (!unit || !unit->getOwner()) return false;
+    const auto* latestData = unit->getOwner()->getLastUnitData(unit->data.getId());
+    if (!latestData) return false;
+    return unit->data.getVersion() < latestData->getVersion();
+}
+
+int GameUnit::get_version() const {
+    if (!unit) return 0;
+    return unit->data.getVersion();
 }
 
 // ========== CAPABILITY FLAGS ==========

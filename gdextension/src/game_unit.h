@@ -89,6 +89,21 @@ public:
     // --- Full stats as a dictionary (convenient for UI) ---
     Dictionary get_stats() const;
 
+    // --- Experience & version (Phase 20) ---
+    /// Returns the commando rank level (0-5). Returns -1 for non-commando units.
+    int get_commando_rank() const;
+
+    /// Returns the commando rank name ("Greenhorn", "Average", etc.)
+    /// Returns "" for non-commando units.
+    String get_commando_rank_name() const;
+
+    /// Returns true if this unit's stats are outdated compared to the player's
+    /// latest research version of this unit type.
+    bool is_dated() const;
+
+    /// Returns the unit's current version number.
+    int get_version() const;
+
     // --- Capability flags (from static data) ---
     /// Returns a Dictionary of boolean capability flags for the selected unit.
     /// Keys: has_weapon, can_survey, can_place_mines, can_clear_area,

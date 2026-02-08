@@ -82,6 +82,8 @@ func refresh_units() -> void:
 				var frame_count: int = sprite_cache.get_animation_frame_count(type_name) if has_anim else 0
 				_anim_unit_types[type_name] = {"has_anim": has_anim, "frame_count": frame_count}
 
+			var v_is_big: bool = v.is_big()
+
 			_unit_data.append({
 				"id": uid,
 				"pos": pos,
@@ -91,7 +93,7 @@ func refresh_units() -> void:
 				"hp": hp,
 				"hp_max": hp_max,
 				"is_building": false,
-				"is_big": false,
+				"is_big": v_is_big,
 				"is_working": false,
 				"is_constructing": v.is_building_a_building(),
 				"build_progress": 0.0,
@@ -104,6 +106,11 @@ func refresh_units() -> void:
 
 			var key := "%d,%d" % [pos.x, pos.y]
 			_unit_positions[key] = uid
+			# Phase 20: Big vehicles occupy 2x2 tiles
+			if v_is_big:
+				_unit_positions["%d,%d" % [pos.x + 1, pos.y]] = uid
+				_unit_positions["%d,%d" % [pos.x, pos.y + 1]] = uid
+				_unit_positions["%d,%d" % [pos.x + 1, pos.y + 1]] = uid
 
 		# Buildings
 		var buildings = engine.get_player_buildings(pi)
@@ -356,18 +363,28 @@ func _draw_vehicle(unit: Dictionary, world_pos: Vector2) -> void:
 		1.0
 	)
 
-	var draw_pos := world_pos - Vector2(tex.get_width() / 2.0, tex.get_height() / 2.0)
-	draw_texture_rect(tex, Rect2(draw_pos, tex.get_size()), false, color_mod)
+	# Phase 20: Scale for 2x2 vehicles
+	if unit["is_big"]:
+		var size := float(TILE_SIZE * 2)
+		var center := world_pos + Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
+		var draw_pos := center - Vector2(size / 2.0, size / 2.0)
+		draw_texture_rect(tex, Rect2(draw_pos, Vector2(size, size)), false, color_mod)
+	else:
+		var draw_pos := world_pos - Vector2(tex.get_width() / 2.0, tex.get_height() / 2.0)
+		draw_texture_rect(tex, Rect2(draw_pos, tex.get_size()), false, color_mod)
 
 
 func _draw_vehicle_fallback(unit: Dictionary, world_pos: Vector2) -> void:
 	## Fallback: draw a colored shape when no sprite is available.
-	var radius := 20.0
+	var radius := 20.0 if not unit["is_big"] else 40.0
+	var center := world_pos
+	if unit["is_big"]:
+		center += Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
 	var color: Color = unit["color"]
 
 	# Draw filled circle with outline
-	draw_circle(world_pos, radius, color.darkened(0.2))
-	draw_circle(world_pos, radius - 2, color)
+	draw_circle(center, radius, color.darkened(0.2))
+	draw_circle(center, radius - 2, color)
 
 	# Direction indicator (small triangle pointing in facing direction)
 	var dir_idx: int = _unit_directions.get(unit["id"], 0)
@@ -437,7 +454,8 @@ func _draw_selection_indicator(unit: Dictionary, world_pos: Vector2) -> void:
 	var pulse := sin(_anim_time * SELECTION_PULSE_SPEED) * 0.3 + 0.7  # 0.4 - 1.0
 	var sel_color := Color(0.3, 0.85, 1.0, pulse)  # Cyan pulse
 
-	if unit["is_building"]:
+	if unit["is_building"] or unit["is_big"]:
+		# Rectangle selection for buildings and big vehicles
 		var size: float = TILE_SIZE if not unit["is_big"] else TILE_SIZE * 2
 		var rect_pos := world_pos - Vector2(size / 2.0, size / 2.0)
 		if unit["is_big"]:
