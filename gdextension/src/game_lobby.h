@@ -122,6 +122,31 @@ public:
     /// Hand off the server/client to a GameEngine for gameplay.
     /// Returns true if handoff succeeded.
     bool handoff_to_engine(GameEngine* engine);
+
+    // ========== PHASE 32: MULTIPLAYER ENHANCEMENTS ==========
+
+    // --- 32.1: Team/Clan assignment ---
+    /// Set the local player's clan (team). -1 = no clan.
+    void set_clan(int clan_id);
+
+    /// Get available clans as Array of Dictionaries: [{id, name, description}]
+    Array get_available_clans() const;
+
+    // --- 32.4: Map checksum ---
+    /// Get the currently selected map's CRC checksum (0 if no map).
+    int get_map_checksum() const;
+
+    // --- 32.6: Player disconnect + kick ---
+    /// Kick a player by closing their connection (host only).
+    void kick_player_connection(int player_id);
+
+    // --- 32.10: Multiplayer save game ---
+    /// Get a list of saved multiplayer games that can be loaded in the lobby.
+    /// Returns Array of Dictionaries: [{slot, name, turn, map_name, player_count}]
+    Array get_multiplayer_saves() const;
+
+    /// Load a saved multiplayer game in the lobby (host only).
+    bool load_multiplayer_save(int slot);
 };
 
 } // namespace godot

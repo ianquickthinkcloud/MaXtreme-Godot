@@ -47,6 +47,11 @@ var _unit_directions: Dictionary = {} # unit_id -> last known direction (0-7)
 var _anim_time := 0.0            # For animated units and selection pulse
 var _anim_unit_types: Dictionary = {} # type_name -> {has_anim: bool, frame_count: int}
 
+# Phase 31: Vehicle tracks
+var _track_points: Array = []  # Array of {pos: Vector2, age: float}
+const TRACK_MAX_AGE := 30.0  # Tracks fade after 30 seconds
+const TRACK_MAX_COUNT := 500
+
 
 func setup(eng) -> void:
 	engine = eng
@@ -102,6 +107,10 @@ func refresh_units() -> void:
 				"is_manual_fire": v.is_manual_fire(),
 				"is_disabled": v.is_disabled(),
 				"stored_units": v.get_stored_units_count(),
+				# Phase 31: Advanced unit features
+				"is_plane": v.is_plane() if v.has_method("is_plane") else false,
+				"flight_height": v.get_flight_height() if v.has_method("get_flight_height") else 0,
+				"is_stealth": v.is_stealth() if v.has_method("is_stealth") else false,
 			})
 
 			var key := "%d,%d" % [pos.x, pos.y]
@@ -151,6 +160,9 @@ func refresh_units() -> void:
 				"stored_units": b.get_stored_units_count(),
 				# Phase 26: Connector flags
 				"connects_to_base": b.connects_to_base() if b.has_method("connects_to_base") else false,
+				# Phase 31: Advanced unit features
+				"is_rubble": b.is_rubble() if b.has_method("is_rubble") else false,
+				"is_mine": b.is_mine_building() if b.has_method("is_mine_building") else false,
 			})
 
 			# Register tile occupancy (big buildings span 2x2)
@@ -191,8 +203,23 @@ func update_unit_direction(unit_id: int, from_tile: Vector2i, to_tile: Vector2i)
 
 func _process(delta: float) -> void:
 	_anim_time += delta
+	# Phase 31: Age and prune track points
+	var i := 0
+	while i < _track_points.size():
+		_track_points[i]["age"] += delta
+		if _track_points[i]["age"] > TRACK_MAX_AGE:
+			_track_points.remove_at(i)
+		else:
+			i += 1
 	# Redraw every frame for animations
 	queue_redraw()
+
+
+func add_track_point(world_pos: Vector2) -> void:
+	## Phase 31: Record a vehicle track point at the given world position.
+	_track_points.append({"pos": world_pos, "age": 0.0})
+	if _track_points.size() > TRACK_MAX_COUNT:
+		_track_points.pop_front()
 
 
 func _draw() -> void:
@@ -215,6 +242,13 @@ func _draw() -> void:
 		show_shadows = gm.settings.get("display_shadows", true)
 		show_effects = gm.settings.get("display_effects", true)
 
+	# Phase 31: Draw vehicle tracks (before shadows and units)
+	if show_tracks and _track_points.size() > 0:
+		for tp in _track_points:
+			var alpha := 1.0 - (tp["age"] / TRACK_MAX_AGE)
+			alpha = alpha * 0.3  # Subtle
+			draw_circle(tp["pos"], 2.0, Color(0.35, 0.3, 0.25, alpha))
+
 	# Two-pass rendering: shadows first, then units on top
 	# Pass 1: Shadows (Phase 30: respect display_shadows setting)
 	if show_shadows:
@@ -226,17 +260,44 @@ func _draw() -> void:
 				continue
 			_draw_shadow(unit, world_pos)
 
+	# Phase 31: Read display_tracks setting
+	var show_tracks := true
+	if gm and gm.settings:
+		show_tracks = gm.settings.get("display_tracks", true)
+
 	# Pass 2: Units
 	for unit in _unit_data:
 		var world_pos := _get_unit_world_pos(unit)
+
+		# Phase 31: Planes get a vertical offset based on flight height
+		if unit.get("is_plane", false) and unit.get("flight_height", 0) > 0:
+			world_pos.y -= unit["flight_height"] * 0.3  # Visual elevation
+
 		if not visible_rect.has_point(world_pos):
 			continue
+
+		# Phase 31: Enemy mines are hidden (own mines visible)
+		if unit.get("is_mine", false) and unit["player"] != current_player:
+			if fog_renderer and fog_renderer.fog_enabled:
+				continue  # Hide enemy mines under fog
+
 		if _is_hidden_by_fog(unit):
 			continue
+
+		# Phase 31: Rubble gets grey tint overlay
+		if unit.get("is_rubble", false):
+			_draw_rubble(unit, world_pos)
+			continue  # Rubble doesn't get normal rendering
 
 		# Selection indicator (drawn behind unit)
 		if unit["id"] == selected_unit_id:
 			_draw_selection_indicator(unit, world_pos)
+
+		# Phase 31: Stealth units get transparency when not selected
+		var _pre_stealth_modulate := false
+		if unit.get("is_stealth", false) and unit["player"] == current_player and unit["id"] != selected_unit_id:
+			_pre_stealth_modulate = true
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)  # Reset
 
 		# Draw the unit
 		if unit["is_building"]:
@@ -246,6 +307,14 @@ func _draw() -> void:
 
 		# HP bar
 		_draw_hp_bar(unit, world_pos)
+
+		# Phase 31: Plane altitude indicator
+		if unit.get("is_plane", false) and unit.get("flight_height", 0) > 0:
+			_draw_plane_altitude_badge(world_pos, unit["flight_height"])
+
+		# Phase 31: Stealth indicator
+		if unit.get("is_stealth", false) and unit["player"] == current_player:
+			_draw_stealth_indicator(world_pos)
 
 		# Construction progress
 		if unit["is_constructing"]:
@@ -336,12 +405,14 @@ func _draw_procedural_shadow(pos: Vector2, is_big: bool) -> void:
 
 
 func _draw_vehicle(unit: Dictionary, world_pos: Vector2) -> void:
-	## Draw a vehicle using directional sprites with player color tinting.
+	## Draw a vehicle using directional sprites with team colour mask recolouring.
+	## Phase 33: Uses magenta mask replacement when available, falls back to tinting.
 	if not sprite_cache:
 		_draw_vehicle_fallback(unit, world_pos)
 		return
 
 	var direction: int = _unit_directions.get(unit["id"], 0)
+	var player_color: Color = unit["color"]
 
 	# Check for animated unit (infantry/commando)
 	var anim_info: Dictionary = _anim_unit_types.get(unit["type_name"], {})
@@ -353,31 +424,29 @@ func _draw_vehicle(unit: Dictionary, world_pos: Vector2) -> void:
 	if gm_ref and gm_ref.settings:
 		show_anims = gm_ref.settings.get("display_animations", true)
 
+	# Phase 33: Try recolored textures first (magenta mask), then plain + tint
 	if anim_info.get("has_anim", false) and anim_info.get("frame_count", 0) > 0:
-		# Animated unit: cycle through frames
 		var frame_count: int = anim_info["frame_count"]
 		var frame: int = int(_anim_time * ANIM_FPS) % frame_count if show_anims else 0
-		# Only animate if unit is moving and animations enabled
 		if show_anims and move_animator and move_animator.is_animating(unit["id"]):
-			tex = sprite_cache.get_vehicle_anim_frame(unit["type_name"], direction, frame)
+			tex = sprite_cache.get_vehicle_anim_frame_recolored(unit["type_name"], direction, frame, player_color)
 		else:
-			# Standing still or animations disabled: use frame 0
-			tex = sprite_cache.get_vehicle_anim_frame(unit["type_name"], direction, 0)
+			tex = sprite_cache.get_vehicle_anim_frame_recolored(unit["type_name"], direction, 0, player_color)
 			if not tex:
-				tex = sprite_cache.get_vehicle_texture(unit["type_name"], direction)
+				tex = sprite_cache.get_vehicle_texture_recolored(unit["type_name"], direction, player_color)
 	else:
-		tex = sprite_cache.get_vehicle_texture(unit["type_name"], direction)
+		tex = sprite_cache.get_vehicle_texture_recolored(unit["type_name"], direction, player_color)
 
 	if not tex:
 		_draw_vehicle_fallback(unit, world_pos)
 		return
 
-	# Draw sprite with player color tint
-	var tint_color: Color = unit["color"]
+	# Draw with minimal tint (recoloring handles the main player identification)
+	# Only apply a subtle tint to non-mask areas for visual cohesion
 	var color_mod := Color(
-		lerpf(1.0, tint_color.r, PLAYER_TINT_STRENGTH),
-		lerpf(1.0, tint_color.g, PLAYER_TINT_STRENGTH),
-		lerpf(1.0, tint_color.b, PLAYER_TINT_STRENGTH),
+		lerpf(1.0, player_color.r, PLAYER_TINT_STRENGTH * 0.15),
+		lerpf(1.0, player_color.g, PLAYER_TINT_STRENGTH * 0.15),
+		lerpf(1.0, player_color.b, PLAYER_TINT_STRENGTH * 0.15),
 		1.0
 	)
 
@@ -416,11 +485,14 @@ func _draw_vehicle_fallback(unit: Dictionary, world_pos: Vector2) -> void:
 
 func _draw_building(unit: Dictionary, world_pos: Vector2) -> void:
 	## Draw a building using its sprite, scaled to fit tile footprint.
+	## Phase 33: Uses magenta mask recolouring for team colours.
 	if not sprite_cache:
 		_draw_building_fallback(unit, world_pos)
 		return
 
-	var tex: Texture2D = sprite_cache.get_building_texture(unit["type_name"])
+	var player_color: Color = unit["color"]
+	# Phase 33: Use recolored texture (magenta mask replacement)
+	var tex: Texture2D = sprite_cache.get_building_texture_recolored(unit["type_name"], player_color)
 	if not tex:
 		_draw_building_fallback(unit, world_pos)
 		return
@@ -434,12 +506,11 @@ func _draw_building(unit: Dictionary, world_pos: Vector2) -> void:
 	else:
 		draw_pos = world_pos - Vector2(size / 2.0, size / 2.0)
 
-	# Player color tint (lighter than vehicles)
-	var tint_color: Color = unit["color"]
+	# Subtle tint for non-masked areas
 	var color_mod := Color(
-		lerpf(1.0, tint_color.r, PLAYER_TINT_STRENGTH * 0.6),
-		lerpf(1.0, tint_color.g, PLAYER_TINT_STRENGTH * 0.6),
-		lerpf(1.0, tint_color.b, PLAYER_TINT_STRENGTH * 0.6),
+		lerpf(1.0, player_color.r, PLAYER_TINT_STRENGTH * 0.1),
+		lerpf(1.0, player_color.g, PLAYER_TINT_STRENGTH * 0.1),
+		lerpf(1.0, player_color.b, PLAYER_TINT_STRENGTH * 0.1),
 		1.0
 	)
 
@@ -719,3 +790,74 @@ func _draw_badge_cargo(pos: Vector2, count: int) -> void:
 	else:
 		# Just draw a bright indicator
 		draw_circle(pos, 3.0, text_color)
+
+
+# =============================================================================
+# PHASE 31: ADVANCED UNIT FEATURE RENDERING
+# =============================================================================
+
+func _draw_plane_altitude_badge(world_pos: Vector2, flight_height: int) -> void:
+	## Draw a small altitude indicator badge for airborne planes.
+	var badge_pos := world_pos + Vector2(18, -20)
+	draw_circle(badge_pos, 7, Color(0, 0, 0, 0.7))
+	# Up arrow for flying
+	var arrow_color := Color(0.4, 0.7, 1.0, 0.9)
+	draw_line(badge_pos + Vector2(0, 3), badge_pos + Vector2(0, -4), arrow_color, 1.5)
+	draw_line(badge_pos + Vector2(0, -4), badge_pos + Vector2(-3, -1), arrow_color, 1.5)
+	draw_line(badge_pos + Vector2(0, -4), badge_pos + Vector2(3, -1), arrow_color, 1.5)
+
+
+func _draw_stealth_indicator(world_pos: Vector2) -> void:
+	## Draw a subtle stealth shimmer effect on own stealth units.
+	var alpha := sin(_anim_time * 2.5) * 0.15 + 0.25  # Pulsing 0.1 - 0.4
+	var shimmer_color := Color(0.6, 0.8, 1.0, alpha)
+	# Dashed outline around unit
+	var half := 14.0
+	var corners := [
+		world_pos + Vector2(-half, -half),
+		world_pos + Vector2(half, -half),
+		world_pos + Vector2(half, half),
+		world_pos + Vector2(-half, half),
+	]
+	for i in range(4):
+		var from := corners[i]
+		var to := corners[(i + 1) % 4]
+		# Draw dashed (every other segment)
+		var mid := (from + to) / 2.0
+		draw_line(from, mid, shimmer_color, 1.0)
+
+
+func _draw_rubble(unit: Dictionary, world_pos: Vector2) -> void:
+	## Draw rubble as a grey-brown mound.
+	var is_big: bool = unit["is_big"]
+	var half := TILE_SIZE * 0.35 if not is_big else TILE_SIZE * 0.7
+	var center := world_pos
+	if is_big:
+		center += Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
+
+	# Try to use rubble sprite from cache
+	if sprite_cache:
+		var rubble_name := "rubble_big" if is_big else "rubble_small"
+		var tex: Texture2D = sprite_cache.get_building_texture(rubble_name)
+		if tex:
+			var size := Vector2(TILE_SIZE, TILE_SIZE) if not is_big else Vector2(TILE_SIZE * 2, TILE_SIZE * 2)
+			var draw_pos := world_pos - Vector2(size.x / 2.0, size.y / 2.0)
+			if is_big:
+				draw_pos = world_pos
+			draw_texture_rect(tex, Rect2(draw_pos, size), false, Color(0.7, 0.65, 0.6, 0.9))
+			return
+
+	# Fallback: procedural rubble (grey-brown irregular shape)
+	var rubble_color := Color(0.45, 0.4, 0.35, 0.85)
+	# Main mound
+	var points := PackedVector2Array()
+	for i in range(8):
+		var angle := float(i) / 8.0 * TAU
+		var r := half * (0.6 + 0.4 * sin(float(i) * 2.3 + 0.7))
+		points.append(center + Vector2(cos(angle) * r, sin(angle) * r * 0.7))
+	draw_colored_polygon(points, rubble_color)
+
+	# Debris dots
+	for i in range(5):
+		var offset := Vector2(sin(float(i) * 3.1) * half * 0.5, cos(float(i) * 2.7) * half * 0.3)
+		draw_circle(center + offset, 2.5, Color(0.55, 0.5, 0.45, 0.6))

@@ -154,6 +154,9 @@ func play_attack_sequence(attacker_tile: Vector2i, target_tile: Vector2i,
 	explosion.is_kill = will_destroy
 	_effects.append(explosion)
 
+	# Phase 33: Play impact/explosion sound after delay
+	_play_delayed_sound(impact_delay, "explosion" if not will_destroy else "unit_destroyed")
+
 	# Extra smoke on kill
 	if will_destroy:
 		var smoke := Effect.new()
@@ -404,3 +407,12 @@ func _draw_corpse(fx: Effect) -> void:
 
 func _tile_center(tile: Vector2i) -> Vector2:
 	return Vector2(tile.x * TILE_SIZE + TILE_SIZE / 2.0, tile.y * TILE_SIZE + TILE_SIZE / 2.0)
+
+
+func _play_delayed_sound(delay: float, sound_name: String) -> void:
+	## Phase 33: Play a sound effect after a delay (for impact/explosion timing).
+	if delay <= 0.01:
+		AudioManager.play_sound(sound_name)
+	else:
+		var timer := get_tree().create_timer(delay)
+		timer.timeout.connect(func(): AudioManager.play_sound(sound_name))

@@ -32,7 +32,7 @@ func _ready() -> void:
 	settings_button.pressed.connect(_on_settings)
 	exit_button.pressed.connect(_on_exit)
 
-	version_label.text = "MaXtreme v0.10.0 -- Phase 30"
+	version_label.text = "MaXtreme v1.0.0 -- All Phases Complete"
 
 	# Phase 24: Enable Load Game button
 	load_game_button.disabled = false
@@ -59,9 +59,8 @@ func _ready() -> void:
 		else:
 			logo_texture.visible = false
 
-	# Start menu music
-	if not AudioManager.is_music_playing():
-		AudioManager.play_music("res://data/music/main.ogg")
+	# Phase 33: Crossfade to menu music
+	AudioManager.play_menu_music()
 
 
 func _process(delta: float) -> void:

@@ -40,10 +40,24 @@ var _global_sounds: Dictionary = {
 	"click": SOUNDS_BASE + "arm.ogg",  # Reuse arm.ogg for UI clicks
 	"build_place": SOUNDS_BASE + "arm.ogg",
 	"turn_end": SOUNDS_BASE + "absorb.ogg",
-	# Phase 27: Victory/defeat sounds (use existing sounds as placeholders)
+	# Phase 27: Victory/defeat sounds
 	"victory": SOUNDS_BASE + "Chat.ogg",
 	"defeat": SOUNDS_BASE + "absorb.ogg",
 	"research_complete": SOUNDS_BASE + "arm.ogg",
+	# Phase 33: Additional sound effects
+	"explosion": SOUNDS_BASE + "absorb.ogg",     # Impact/explosion
+	"unit_destroyed": SOUNDS_BASE + "absorb.ogg", # Unit death
+	"build_complete": SOUNDS_BASE + "arm.ogg",     # Construction finished
+	"production_complete": SOUNDS_BASE + "arm.ogg", # Factory produced a unit
+	"self_destruct": SOUNDS_BASE + "absorb.ogg",   # Self-destruct
+	"alert_attack": SOUNDS_BASE + "arm.ogg",       # Under attack alert
+	"alert_lost": SOUNDS_BASE + "absorb.ogg",      # Unit lost alert
+	"alert_warning": SOUNDS_BASE + "arm.ogg",      # Generic warning
+	"ui_hover": SOUNDS_BASE + "dummy.ogg",         # UI hover (optional)
+	"ui_open": SOUNDS_BASE + "arm.ogg",            # Panel/dialog open
+	"ui_close": SOUNDS_BASE + "absorb.ogg",        # Panel/dialog close
+	"turn_start": SOUNDS_BASE + "arm.ogg",         # New turn begins
+	"mine_explode": SOUNDS_BASE + "absorb.ogg",    # Mine triggers
 }
 
 
@@ -162,6 +176,14 @@ func play_unit_sound(type_name: String, sound_type: String, is_water: bool = fal
 	_try_play_sfx(path)
 
 
+func play_building_sound(type_name: String, sound_type: String) -> void:
+	## Phase 33: Play a per-building sound effect.
+	## type_name: building folder name (e.g. "landmine", "factory")
+	## sound_type: "start", "stop", "wait", "attack"
+	var path := BUILDINGS_BASE + type_name + "/" + sound_type + ".ogg"
+	_try_play_sfx(path)
+
+
 func play_sfx_at_path(path: String) -> void:
 	## Play a sound effect from an explicit file path.
 	_play_sfx_from_path(path)
@@ -192,6 +214,10 @@ func _play_stream(stream: AudioStream) -> void:
 
 # --- Music playback ---
 
+var _fade_tween: Tween = null  # Phase 33: For crossfade transitions
+var _music_context := "menu"  # Phase 33: Track current music context ("menu", "game", "victory", "defeat")
+
+
 func play_music(track_path: String = "") -> void:
 	## Play a specific music track, or a random one if no path given.
 	if track_path == "" and _music_tracks.size() > 0:
@@ -216,11 +242,99 @@ func is_music_playing() -> bool:
 
 
 func _on_music_finished() -> void:
-	# Auto-advance to next track
+	# Auto-advance to next track (only in game context)
+	if _music_context == "victory" or _music_context == "defeat":
+		return  # Don't auto-advance after end-game music
 	if _music_tracks.size() == 0:
 		return
 	_current_music_index = (_current_music_index + 1) % _music_tracks.size()
 	play_music(_music_tracks[_current_music_index])
+
+
+# --- Phase 33: Music transitions ---
+
+func crossfade_to(track_path: String, fade_duration: float = 1.5) -> void:
+	## Smoothly crossfade from current music to a new track.
+	if _fade_tween:
+		_fade_tween.kill()
+
+	var stream := _load_sound(track_path)
+	if not stream:
+		stop_music()
+		return
+
+	if not _music_player.playing:
+		# No current music — just play directly
+		_music_player.stream = stream
+		_music_player.volume_db = linear_to_db(0.0)
+		_music_player.play()
+		_fade_tween = create_tween()
+		_fade_tween.tween_property(_music_player, "volume_db",
+			_get_music_volume_db(), fade_duration)
+		return
+
+	# Fade out current, then fade in new
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(_music_player, "volume_db", -40.0, fade_duration * 0.5)
+	_fade_tween.tween_callback(func():
+		_music_player.stream = stream
+		_music_player.play()
+	)
+	_fade_tween.tween_property(_music_player, "volume_db",
+		_get_music_volume_db(), fade_duration * 0.5)
+
+
+func play_menu_music() -> void:
+	## Phase 33: Transition to menu music with crossfade.
+	_music_context = "menu"
+	crossfade_to("res://data/music/main.ogg")
+
+
+func play_game_music() -> void:
+	## Phase 33: Transition to in-game background music with crossfade.
+	_music_context = "game"
+	if _music_tracks.size() > 0:
+		_current_music_index = randi() % _music_tracks.size()
+		crossfade_to(_music_tracks[_current_music_index])
+
+
+func play_victory_music() -> void:
+	## Phase 33: Play victory music with crossfade.
+	_music_context = "victory"
+	# Try winr.ogg first, fallback to main.ogg
+	if FileAccess.file_exists(MUSIC_BASE + "winr.ogg"):
+		crossfade_to(MUSIC_BASE + "winr.ogg", 2.0)
+	else:
+		play_sound("victory")
+
+
+func play_defeat_music() -> void:
+	## Phase 33: Play defeat music with crossfade.
+	_music_context = "defeat"
+	# Try lose.ogg first, fallback to sound
+	if FileAccess.file_exists(MUSIC_BASE + "lose.ogg"):
+		crossfade_to(MUSIC_BASE + "lose.ogg", 2.0)
+	else:
+		play_sound("defeat")
+
+
+func fade_out_music(duration: float = 2.0) -> void:
+	## Phase 33: Fade out current music gracefully.
+	if not _music_player.playing:
+		return
+	if _fade_tween:
+		_fade_tween.kill()
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(_music_player, "volume_db", -40.0, duration)
+	_fade_tween.tween_callback(func(): _music_player.stop())
+
+
+func _get_music_volume_db() -> float:
+	## Get the target music volume in dB from settings.
+	var percent: int = 60
+	if GameManager:
+		percent = GameManager.settings.get("audio_music", 60)
+	return _percent_to_db(percent)
 
 
 # --- Sound loading and caching ---

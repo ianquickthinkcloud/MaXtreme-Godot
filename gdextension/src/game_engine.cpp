@@ -19,6 +19,8 @@
 #include "game/logic/turncounter.h"
 #include "game/logic/turntimeclock.h"
 #include "game/logic/casualtiestracker.h"
+#include "game/data/freezemode.h"
+#include "game/protocol/netmessage.h"
 #include "game/logic/action/actionendturn.h"
 #include "game/logic/action/actionstartturn.h"
 #include "game/logic/server.h"
@@ -114,6 +116,12 @@ void GameEngine::_bind_methods() {
     // Networking (Phase 16)
     ClassDB::bind_method(D_METHOD("get_network_mode"), &GameEngine::get_network_mode);
     ClassDB::bind_method(D_METHOD("is_multiplayer"), &GameEngine::is_multiplayer);
+
+    // Phase 32: Multiplayer Enhancements
+    ClassDB::bind_method(D_METHOD("get_freeze_status"), &GameEngine::get_freeze_status);
+    ClassDB::bind_method(D_METHOD("request_resync"), &GameEngine::request_resync);
+    ClassDB::bind_method(D_METHOD("get_model_checksum"), &GameEngine::get_model_checksum);
+    ClassDB::bind_method(D_METHOD("get_player_connection_states"), &GameEngine::get_player_connection_states);
 
     // Signals for turn system events
     ADD_SIGNAL(MethodInfo("turn_ended"));
@@ -1019,6 +1027,115 @@ Array GameEngine::get_casualties_report() const {
         entry["total_losses"] = total;
 
         result.push_back(entry);
+    }
+    return result;
+}
+
+// ========== PHASE 32: MULTIPLAYER ENHANCEMENTS ==========
+
+Dictionary GameEngine::get_freeze_status() const {
+    Dictionary result;
+    result["is_frozen"] = false;
+    result["mode"] = String("none");
+    result["disconnected_players"] = Array();
+
+    if (!client) {
+        return result;
+    }
+
+    auto& freezeModes = client->getFreezeModes();
+    if (freezeModes.isFrozen()) {
+        result["is_frozen"] = true;
+        if (freezeModes.isEnabled(eFreezeMode::Pause)) {
+            result["mode"] = String("pause");
+        } else if (freezeModes.isEnabled(eFreezeMode::WaitForClient)) {
+            result["mode"] = String("wait_client");
+        } else if (freezeModes.isEnabled(eFreezeMode::WaitForServer)) {
+            result["mode"] = String("wait_server");
+        } else if (freezeModes.isEnabled(eFreezeMode::WaitForTurnend)) {
+            result["mode"] = String("wait_turnend");
+        }
+    }
+
+    // Gather player connection states
+    Array dc_players;
+    const auto& playerStates = client->getPlayerConnectionStates();
+    for (const auto& [playerId, state] : playerStates) {
+        if (state != ePlayerConnectionState::Connected) {
+            Dictionary ps;
+            ps["id"] = playerId;
+            String stateStr;
+            switch (state) {
+                case ePlayerConnectionState::Disconnected: stateStr = "disconnected"; break;
+                case ePlayerConnectionState::NotResponding: stateStr = "not_responding"; break;
+                case ePlayerConnectionState::Inactive: stateStr = "inactive"; break;
+                default: stateStr = "unknown"; break;
+            }
+            ps["state"] = stateStr;
+            dc_players.push_back(ps);
+        }
+    }
+    result["disconnected_players"] = dc_players;
+
+    return result;
+}
+
+bool GameEngine::request_resync() {
+    if (!client || !connection_manager) {
+        UtilityFunctions::push_warning("[MaXtreme] request_resync: no client or connection");
+        return false;
+    }
+    try {
+        // Send a REQUEST_RESYNC_MODEL message to the server
+        cNetMessageRequestResync msg;
+        connection_manager->sendToServer(msg);
+        UtilityFunctions::print("[MaXtreme] GameEngine: Resync requested");
+        return true;
+    } catch (const std::exception& e) {
+        UtilityFunctions::push_warning("[MaXtreme] request_resync failed: ", e.what());
+        return false;
+    }
+}
+
+int GameEngine::get_model_checksum() const {
+    auto* m = get_active_model();
+    if (!m) return 0;
+    return static_cast<int>(m->getChecksum());
+}
+
+Array GameEngine::get_player_connection_states() const {
+    Array result;
+    if (!client) return result;
+
+    const auto& playerStates = client->getPlayerConnectionStates();
+    auto* m = get_active_model();
+    if (!m) return result;
+
+    for (const auto& [playerId, state] : playerStates) {
+        Dictionary ps;
+        ps["player_id"] = playerId;
+
+        // Try to get the player name
+        for (const auto& player : m->getPlayerList()) {
+            if (player && player->getId() == playerId) {
+                ps["player_name"] = String(player->getName().c_str());
+                break;
+            }
+        }
+        if (!ps.has("player_name")) {
+            ps["player_name"] = String("Player ") + String::num_int64(playerId);
+        }
+
+        String stateStr;
+        switch (state) {
+            case ePlayerConnectionState::Connected: stateStr = "connected"; break;
+            case ePlayerConnectionState::Disconnected: stateStr = "disconnected"; break;
+            case ePlayerConnectionState::NotResponding: stateStr = "not_responding"; break;
+            case ePlayerConnectionState::Inactive: stateStr = "inactive"; break;
+            default: stateStr = "unknown"; break;
+        }
+        ps["state"] = stateStr;
+        result.push_back(ps);
     }
     return result;
 }

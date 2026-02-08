@@ -214,6 +214,44 @@ public:
 
     /// Returns max build factor (0 = no turbo, >1 means turbo build is available)
     int get_max_build_factor() const;
+
+    // ========== PHASE 31: ADVANCED UNIT FEATURES ==========
+
+    /// Returns true if this is an air unit (factorAir > 0)
+    bool is_plane() const;
+
+    /// Returns the flight height (0-64). 0 = on ground/landed.
+    int get_flight_height() const;
+
+    /// Returns true if this air unit can land at its current position
+    bool can_land() const;
+
+    /// Returns true if this unit has stealth capability (isStealthOn != 0)
+    bool is_stealth() const;
+
+    /// Returns the stealth terrain flags as int (bitfield: Ground=4, Sea=2, Area=32)
+    int get_stealth_flags() const;
+
+    /// Returns true if this unit can detect stealth (canDetectStealthOn != 0)
+    bool can_detect_stealth() const;
+
+    /// Returns true if this building is rubble
+    bool is_rubble() const;
+
+    /// Returns the rubble resource value (0 if not rubble)
+    int get_rubble_value() const;
+
+    /// Returns true if this building is a mine (land/sea/exp mine)
+    bool is_mine_building() const;
+
+    /// Returns true if this vehicle can drive and fire in the same turn
+    bool can_drive_and_fire() const;
+
+    /// Returns the clearing turns remaining for rubble clearing
+    int get_clearing_turns() const;
+
+    /// Returns true if this vehicle has a pending (interrupted) move
+    bool has_pending_move() const;
 };
 
 } // namespace godot

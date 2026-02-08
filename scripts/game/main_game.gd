@@ -43,6 +43,7 @@ var production_panel = null  # ProductionPanel node
 var pause_menu = null        # PauseMenu node
 var game_over_screen = null  # GameOverScreen node
 var network_status = null    # NetworkStatus overlay node
+var _chat_overlay = null     # Phase 32: In-game chat overlay reference
 var minimap = null           # Minimap node
 var _game_paused := false
 var _is_multiplayer := false # True if this is a networked game
@@ -285,9 +286,8 @@ func _start_game() -> void:
 	print("[Game] Ready!%s Turn %d | Map: %dx%d" % [mode_str, engine.get_turn_number(), map_w, map_h])
 	print("[Game] Controls: Left-click=Select/Move/Attack, Right-click=Deselect, WASD=Pan, Scroll=Zoom")
 
-	# Start in-game music (random background track -- if music files exist)
-	AudioManager.stop_music()
-	AudioManager.play_music()  # Picks a random track from musics.json
+	# Phase 33: Crossfade to in-game music (random background track)
+	AudioManager.play_game_music()
 
 	# Create minimap
 	_create_minimap()
@@ -591,8 +591,17 @@ func _try_move(target_tile: Vector2i) -> void:
 			unit_type_name = unit.get_type_name()
 		# Start smooth visual animation along the path
 		move_animator.start_animation(selected_unit_id, path, unit_type_name)
+		# Phase 31: Record vehicle tracks along path
+		if GameManager.settings.get("display_tracks", true):
+			for p_idx in range(path.size()):
+				var wp: Vector2 = path[p_idx]
+				var track_world := Vector2(wp.x * TILE_SIZE + TILE_SIZE / 2.0, wp.y * TILE_SIZE + TILE_SIZE / 2.0)
+				unit_renderer.add_track_point(track_world)
 		# Clear overlays during animation
 		overlay.clear_all()
+		# Phase 31: Group movement — move other selected units too
+		if _selected_units.size() > 1:
+			_move_group_to(target_tile)
 	else:
 		print("[Game] Move failed for unit ", selected_unit_id)
 
@@ -733,6 +742,23 @@ func _update_selected_unit_hud() -> void:
 				progress = 1.0 - (float(remaining_cost) / float(start_cost))
 			extra_info = "Building... (%d turns, %d metal left, %.0f%%)" % [remaining_turns, remaining_cost, progress * 100.0]
 
+		# Phase 31: Extra info for advanced features
+		if unit.is_vehicle():
+			var p31_parts: PackedStringArray = PackedStringArray()
+			if unit.has_method("is_plane") and unit.is_plane():
+				var fh: int = unit.get_flight_height()
+				p31_parts.append("Air (alt: %d)" % fh if fh > 0 else "Air (landed)")
+			if unit.has_method("is_stealth") and unit.is_stealth():
+				p31_parts.append("Stealth")
+			if unit.has_method("can_drive_and_fire") and unit.can_drive_and_fire():
+				p31_parts.append("Drive&Fire")
+			if unit.has_method("has_pending_move") and unit.has_pending_move():
+				p31_parts.append("Move pending (F)")
+			if p31_parts.size() > 0:
+				if extra_info.length() > 0:
+					extra_info += "  |  "
+				extra_info += " | ".join(p31_parts)
+
 		# Fetch capabilities and state for command buttons
 		var caps = unit.get_capabilities()
 		var is_own: bool = (unit.get_owner_id() == current_player)
@@ -783,6 +809,12 @@ func _update_selected_unit_hud() -> void:
 			# Phase 26: Construction state
 			"is_constructing": unit.is_vehicle() and unit.is_building_a_building(),
 			"can_build_path": unit.is_vehicle() and unit.can_build_path() if unit.has_method("can_build_path") else false,
+			# Phase 31: Advanced unit features
+			"is_plane": unit.is_plane() if unit.has_method("is_plane") else false,
+			"flight_height": unit.get_flight_height() if unit.has_method("get_flight_height") else 0,
+			"is_stealth": unit.is_stealth() if unit.has_method("is_stealth") else false,
+			"can_drive_and_fire": unit.can_drive_and_fire() if unit.has_method("can_drive_and_fire") else false,
+			"has_pending_move": unit.has_pending_move() if unit.has_method("has_pending_move") else false,
 		})
 	else:
 		hud.clear_selected_unit()
@@ -1067,9 +1099,14 @@ func _on_move_animation_finished(unit_id: int) -> void:
 		_update_overlays()
 		_update_selected_unit_hud()
 
+		# Phase 31: Check for end-move actions (enemy in range after move)
+		_check_end_move_action(unit_id)
+
 
 func _on_turn_started(turn: int) -> void:
 	print("[Game] === Turn ", turn, " started! ===")
+	# Phase 33: Play turn start sound
+	AudioManager.play_sound("turn_start")
 	# Re-fetch pathfinder since model state changed
 	pathfinder = engine.get_pathfinder()
 	_refresh_fog()
@@ -1160,7 +1197,8 @@ func _on_pause_resumed() -> void:
 func _on_quit_to_menu() -> void:
 	game_running = false
 	_game_paused = false
-	AudioManager.stop_music()
+	# Phase 33: Fade out music before returning to menu
+	AudioManager.fade_out_music(1.0)
 	if GameManager:
 		GameManager.go_to_main_menu()
 
@@ -1189,16 +1227,16 @@ func _on_player_won(player_id: int) -> void:
 	if _sudden_death_active:
 		details += "\nDecided in Sudden Death mode."
 
-	# Stop background music, play victory/defeat music
-	AudioManager.stop_music()
-
+	# Phase 33: Crossfade to victory/defeat music
 	if player_id == current_player:
 		# We won!
+		AudioManager.play_victory_music()
 		if game_over_screen:
 			game_over_screen.show_victory(player_name, details)
 			_game_paused = true
 	else:
 		# Someone else won -- we lost
+		AudioManager.play_defeat_music()
 		if game_over_screen:
 			game_over_screen.show_defeat(player_name, "%s has achieved victory.\n%s" % [player_name, details])
 			_game_paused = true
@@ -1213,8 +1251,8 @@ func _on_player_lost(player_id: int) -> void:
 	print("[Game] === DEFEAT: ", player_name, " eliminated! ===")
 
 	if player_id == current_player:
-		# We lost
-		AudioManager.stop_music()
+		# We lost — Phase 33: Crossfade to defeat music
+		AudioManager.play_defeat_music()
 		if game_over_screen:
 			game_over_screen.show_defeat(player_name, "All your units have been destroyed.")
 			_game_paused = true
@@ -1300,11 +1338,13 @@ func _create_chat_overlay() -> void:
 	var chat = preload("res://scripts/ui/chat_overlay.gd").new()
 	chat.name = "ChatOverlay"
 	add_child(chat)
+	_chat_overlay = chat  # Phase 32: Store reference for system messages
 	chat.add_system_message("Multiplayer game started!")
 
 
 func _create_network_status_overlay() -> void:
-	## Create a simple network status overlay for freeze mode display.
+	## Create a network status overlay for freeze mode, desync, and player status.
+	## Phase 32 enhanced: passes engine reference for detailed status queries.
 	network_status = preload("res://scripts/ui/network_status.gd").new()
 	network_status.name = "NetworkStatus"
 	# Add as a CanvasLayer so it draws above everything
@@ -1313,13 +1353,25 @@ func _create_network_status_overlay() -> void:
 	canvas.layer = 100
 	add_child(canvas)
 	canvas.add_child(network_status)
+	# Phase 32: Give network status access to the engine for detailed queries
+	if network_status.has_method("set_engine"):
+		network_status.set_engine(engine)
 
 
 func _on_freeze_mode_changed(mode: String) -> void:
 	## Called when the game enters or exits a freeze mode (waiting for network).
+	## Phase 32 enhanced: queries detailed freeze status from engine.
 	print("[Game] Freeze mode: ", mode)
 	if network_status:
 		network_status.set_freeze_mode(mode)
+
+	# Phase 32: Check for desync by comparing checksums
+	if mode == "changed" and engine.has_method("get_freeze_status"):
+		var freeze: Dictionary = engine.get_freeze_status()
+		if not freeze.get("is_frozen", false):
+			# Freeze ended — update checksum display
+			if network_status and network_status.has_method("update_checksum"):
+				network_status.update_checksum()
 
 
 func _on_connection_lost() -> void:
@@ -1328,6 +1380,10 @@ func _on_connection_lost() -> void:
 	_game_paused = true
 	if network_status:
 		network_status.show_connection_lost()
+
+	# Phase 32: Show in chat overlay too
+	if _chat_overlay and _chat_overlay.has_method("add_system_message"):
+		_chat_overlay.add_system_message("Connection to server lost!")
 
 	# After a delay, return to main menu
 	await get_tree().create_timer(5.0).timeout
@@ -1542,8 +1598,6 @@ func _on_command_pressed(command: String) -> void:
 	elif command == "upgrade_all":
 		_cmd_upgrade_all()
 	# --- Phase 22: Mining & Economy ---
-	elif command == "survey":
-		_cmd_toggle_survey()
 	elif command == "mining":
 		_cmd_open_mining()
 	# --- Phase 26: Construction Enhancements ---
@@ -1551,6 +1605,9 @@ func _on_command_pressed(command: String) -> void:
 		_cmd_cancel_construction()
 	elif command == "path_build":
 		_cmd_start_path_build()
+	# --- Phase 31: Resume move ---
+	elif command == "resume_move":
+		_cmd_resume_move()
 	# --- Target-selection actions (enter selection mode) ---
 	elif command == "load":
 		_cmd_enter_mode("load")
@@ -1611,18 +1668,6 @@ func _cmd_cancel_build_from_stop() -> void:
 		_cmd_stop()
 
 
-func _cmd_toggle_survey() -> void:
-	var unit = _find_unit(selected_unit_id)
-	if not unit:
-		return
-	# Auto-move is a toggle; check if we're turning it on or off
-	# The engine will handle the toggle internally
-	if actions.set_auto_move(selected_unit_id, true):
-		print("[Game] Toggled auto-survey on unit ", selected_unit_id)
-		_refresh_after_action()
-	else:
-		print("[Game] Failed to toggle survey")
-
 
 func _cmd_toggle_lay_mines() -> void:
 	if actions.set_minelayer_status(selected_unit_id, true, false):
@@ -1652,6 +1697,8 @@ func _cmd_self_destroy() -> void:
 	# Confirm before destroying
 	if actions.self_destroy(selected_unit_id):
 		print("[Game] Self-destructed building ", selected_unit_id)
+		# Phase 33: Play self-destruct sound
+		AudioManager.play_sound("self_destruct")
 		_deselect_unit()
 		_refresh_after_action()
 	else:
@@ -2161,6 +2208,9 @@ func _handle_keyboard_shortcut(ke: InputEventKey) -> bool:
 		KEY_C:
 			_on_command_pressed("clear")
 			return true
+		KEY_F:
+			_cmd_resume_move()
+			return true
 		KEY_DELETE:
 			_on_command_pressed("self_destroy")
 			return true
@@ -2393,6 +2443,85 @@ func _cycle_to_next_unit(reverse: bool) -> void:
 
 
 # =============================================================================
+# PHASE 31: ADVANCED UNIT FEATURES
+# =============================================================================
+
+# --- 31.6: Group Movement ---
+
+func _move_group_to(target_tile: Vector2i) -> void:
+	## Move all selected units toward a target tile (formation movement).
+	if _selected_units.size() <= 1:
+		return  # Single unit uses normal movement
+
+	var moved := 0
+	for uid in _selected_units:
+		if uid == selected_unit_id:
+			continue  # Already moved by normal click handler
+		if not pathfinder:
+			break
+		var path = pathfinder.calculate_path(uid, target_tile)
+		if path.is_empty():
+			continue
+		var cost = pathfinder.get_path_cost(uid, path)
+		var speed = pathfinder.get_movement_points(uid)
+		if cost > speed:
+			continue
+		var result = actions.move_unit(uid, path)
+		if result:
+			var unit = _find_unit(uid)
+			var unit_type := ""
+			if unit:
+				unit_type = unit.get_type_name()
+			move_animator.start_animation(uid, path, unit_type)
+			moved += 1
+	if moved > 0:
+		print("[Game] Group moved %d additional units to %s" % [moved, str(target_tile)])
+
+
+# --- 31.7: End-Move Actions ---
+
+func _check_end_move_action(unit_id: int) -> void:
+	## After a move completes, check if there are enemies in range for auto-attack prompt.
+	var unit = _find_unit(unit_id)
+	if not unit or not pathfinder:
+		return
+
+	# Only check if unit has weapon and shots remaining
+	if not unit.has_weapon():
+		return
+	if unit.get_shots() <= 0 or unit.get_ammo() <= 0:
+		return
+
+	# Check for drive-and-fire capability
+	if not unit.can_drive_and_fire():
+		return  # Can't attack after moving without this capability
+
+	var enemies = pathfinder.get_enemies_in_range(unit_id)
+	if enemies.size() > 0:
+		hud.show_alert("Enemies in range — click to attack!", Color(1.0, 0.7, 0.3))
+
+
+# --- 31.8: Resume Interrupted Move ---
+
+func _cmd_resume_move() -> void:
+	## Resume an interrupted move for the selected vehicle.
+	if selected_unit_id == -1:
+		return
+	var unit = _find_unit(selected_unit_id)
+	if not unit:
+		return
+	if not unit.has_pending_move():
+		hud.show_alert("No pending move to resume", Color(0.7, 0.65, 0.5))
+		return
+	var result = actions.resume_move(selected_unit_id)
+	if result:
+		hud.show_alert("Move resumed", Color(0.3, 0.85, 0.5))
+		print("[Game] Resumed move for unit ", selected_unit_id)
+	else:
+		hud.show_alert("Cannot resume move", Color(1.0, 0.5, 0.4))
+
+
+# =============================================================================
 # PHASE 28: REPORTS & STATISTICS
 # =============================================================================
 
@@ -2486,6 +2615,8 @@ func _cmd_open_economy() -> void:
 func _on_unit_attacked(player_id: int, unit_id: int, unit_name: String, position: Vector2i) -> void:
 	## C++ signal: a unit belonging to player_id was attacked.
 	if player_id == current_player:
+		# Phase 33: Play alert sound for own unit under attack
+		AudioManager.play_sound("alert_attack")
 		hud.show_alert(
 			"%s under attack at (%d, %d)!" % [unit_name, position.x, position.y],
 			Color(1.0, 0.35, 0.2),
@@ -2500,6 +2631,8 @@ func _on_unit_attacked(player_id: int, unit_id: int, unit_name: String, position
 func _on_unit_destroyed(player_id: int, unit_id: int, unit_name: String, position: Vector2i) -> void:
 	## C++ signal: a unit belonging to player_id was destroyed.
 	if player_id == current_player:
+		# Phase 33: Play alert sound for own unit lost
+		AudioManager.play_sound("alert_lost")
 		hud.show_alert(
 			"%s DESTROYED at (%d, %d)!" % [unit_name, position.x, position.y],
 			Color(1.0, 0.2, 0.15),
@@ -2569,6 +2702,8 @@ func _check_production_complete() -> void:
 			# Production just completed
 			var name: String = bldg.get_name()
 			var pos: Vector2i = bldg.get_position()
+			# Phase 33: Play production complete sound
+			AudioManager.play_sound("production_complete")
 			hud.show_alert(
 				"%s — production complete!" % name,
 				Color(0.3, 0.85, 0.5),

@@ -265,6 +265,23 @@ public:
     /// [{unit_type_id: "0.1", unit_name: "Tank", is_building: false,
     ///   losses: [{player_id: 0, count: 3}, ...]}]
     Array get_casualties_report() const;
+
+    // Phase 32: Multiplayer Enhancements
+
+    /// Get the current freeze mode status as a Dictionary.
+    /// {is_frozen, mode: "none"/"pause"/"wait_client"/"wait_server"/"wait_turnend",
+    ///  disconnected_players: [{id, name, state: "connected"/"disconnected"/"not_responding"}]}
+    Dictionary get_freeze_status() const;
+
+    /// Request a model resync from the server (client only).
+    bool request_resync();
+
+    /// Get current model checksum (for desync detection debug).
+    int get_model_checksum() const;
+
+    /// Get player connection states as Array of Dictionaries.
+    /// [{player_id, player_name, state: "connected"/"disconnected"/"not_responding"/"inactive"}]
+    Array get_player_connection_states() const;
 };
 
 } // namespace godot

@@ -150,8 +150,12 @@ var _economy_content: VBoxContainer = null
 
 
 func _ready() -> void:
-	end_turn_button.pressed.connect(func(): end_turn_pressed.emit())
-	build_button.pressed.connect(func(): build_pressed.emit())
+	end_turn_button.pressed.connect(func():
+		AudioManager.play_sound("turn_end")  # Phase 33: Turn end click
+		end_turn_pressed.emit())
+	build_button.pressed.connect(func():
+		AudioManager.play_sound("click")  # Phase 33: Build button click
+		build_pressed.emit())
 	unit_panel.visible = false
 	_create_global_buttons()
 	_create_phase20_hud_elements()
@@ -236,7 +240,9 @@ func _create_global_buttons() -> void:
 	casualties_btn.custom_minimum_size = Vector2(70, 36)
 	casualties_btn.add_theme_font_size_override("font_size", 12)
 	casualties_btn.tooltip_text = "View casualties report"
-	casualties_btn.pressed.connect(func(): command_pressed.emit("open_casualties"))
+	casualties_btn.pressed.connect(func():
+		AudioManager.play_sound("click")
+		command_pressed.emit("open_casualties"))
 	bottom_bar.add_child(casualties_btn)
 
 	var stats_btn := Button.new()
@@ -244,7 +250,9 @@ func _create_global_buttons() -> void:
 	stats_btn.custom_minimum_size = Vector2(70, 36)
 	stats_btn.add_theme_font_size_override("font_size", 12)
 	stats_btn.tooltip_text = "View player statistics"
-	stats_btn.pressed.connect(func(): command_pressed.emit("open_player_stats"))
+	stats_btn.pressed.connect(func():
+		AudioManager.play_sound("click")
+		command_pressed.emit("open_player_stats"))
 	bottom_bar.add_child(stats_btn)
 
 	var army_btn := Button.new()
@@ -252,7 +260,9 @@ func _create_global_buttons() -> void:
 	army_btn.custom_minimum_size = Vector2(70, 36)
 	army_btn.add_theme_font_size_override("font_size", 12)
 	army_btn.tooltip_text = "View army overview"
-	army_btn.pressed.connect(func(): command_pressed.emit("open_army"))
+	army_btn.pressed.connect(func():
+		AudioManager.play_sound("click")
+		command_pressed.emit("open_army"))
 	bottom_bar.add_child(army_btn)
 
 	var econ_btn := Button.new()
@@ -260,7 +270,9 @@ func _create_global_buttons() -> void:
 	econ_btn.custom_minimum_size = Vector2(70, 36)
 	econ_btn.add_theme_font_size_override("font_size", 12)
 	econ_btn.tooltip_text = "View economy summary"
-	econ_btn.pressed.connect(func(): command_pressed.emit("open_economy"))
+	econ_btn.pressed.connect(func():
+		AudioManager.play_sound("click")
+		command_pressed.emit("open_economy"))
 	bottom_bar.add_child(econ_btn)
 
 
@@ -378,7 +390,9 @@ func _create_cmd_button(cmd_name: String, label: String, tooltip: String) -> But
 	btn.custom_minimum_size = Vector2(CMD_BUTTON_STYLE["min_width"], CMD_BUTTON_STYLE["min_height"])
 	btn.add_theme_font_size_override("font_size", CMD_BUTTON_STYLE["font_size"])
 	btn.visible = false
-	btn.pressed.connect(func(): command_pressed.emit(cmd_name))
+	btn.pressed.connect(func():
+		AudioManager.play_sound("click")  # Phase 33: UI click sound
+		command_pressed.emit(cmd_name))
 	_cmd_buttons[cmd_name] = btn
 	return btn
 
@@ -436,6 +450,8 @@ func _create_command_buttons() -> void:
 	# Phase 26: Path building and cancel build
 	cmd_grid_3.add_child(_create_cmd_button("path_build", "PATH BUILD", "Build road/bridge/platform to a target position"))
 	cmd_grid_3.add_child(_create_cmd_button("cancel_build", "CANCEL BUILD", "Cancel construction in progress"))
+	# Phase 31: Resume interrupted move
+	cmd_grid_3.add_child(_create_cmd_button("resume_move", "RESUME", "Resume interrupted movement (F)"))
 
 
 func _create_cargo_panel() -> void:
@@ -2034,6 +2050,14 @@ func update_selected_unit(info: Dictionary) -> void:
 		# Phase 26: Path building (road/bridge/platform)
 		if info.get("can_build_path", false) and not info.get("is_constructing", false):
 			_show_cmd("path_build", "PATH BUILD", false)
+
+		# Phase 31: Resume interrupted move
+		if info.get("has_pending_move", false):
+			_show_cmd("resume_move", "RESUME (F)", false)
+
+		# Phase 31: Drive-and-fire indicator
+		if info.get("can_drive_and_fire", false) and caps.get("has_weapon", false):
+			pass  # Indicated in extra_info text rather than a separate button
 
 		# Survey (auto-move for surveyors)
 		if caps.get("can_survey", false):

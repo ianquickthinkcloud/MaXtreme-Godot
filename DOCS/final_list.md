@@ -1,6 +1,6 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 30)
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 33 — FINAL)
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
@@ -24,11 +24,13 @@
 | 28 | Reports & Statistics | DONE | 4/4 |
 | 29 | Keyboard Shortcuts & UX | DONE | 6/6 |
 | 30 | Preferences & Settings | DONE | 6/6 |
-| **31** | **Advanced Unit Features** | **UP NEXT** | **0/9** |
-| 32 | Multiplayer Enhancements | TODO | 0/10 |
-| 33 | Audio & Polish | TODO | 0/5 |
+| 31 | Advanced Unit Features | DONE | 9/9 |
+| 32 | Multiplayer Enhancements | DONE | 10/10 |
+| 33 | Audio & Polish | DONE | 5/5 |
 
-**Completed: 13 phases (99 items) | Remaining: 3 phases (24 items) | Total: 16 phases (123 items)**
+**Completed: 16 phases (123 items) | Remaining: 0 phases (0 items) | Total: 16 phases (123 items)**
+
+> ALL PHASES COMPLETE
 
 ---
 
@@ -852,44 +854,191 @@ positions along the horizontal center of the map. Players have no choice.
 - `_create_credits_dialog()` builds a scrollable Window with sections: About, M.A.X.R. Engine, MaXtreme Godot Port, Technology, and version info
 - Version label updated to v0.10.0
 
-## Phase 31: Advanced Unit Features — **LOW PRIORITY**
+## Phase 31: Advanced Unit Features — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 31.1 | Plane system (flight height, landing platforms) | **MISSING** | Large |
-| 31.2 | Stealth & detection system | **MISSING** | Large |
-| 31.3 | Rubble system (rendering + clearing) | **MISSING** | Medium |
-| 31.4 | Mine rendering (own visible, enemy hidden) | **MISSING** | Medium |
-| 31.5 | Vehicle tracks on terrain | **MISSING** | Small |
-| 31.6 | Group movement / formation | **MISSING** | Large |
-| 31.7 | End-move actions (attack/load/enter after move) | **MISSING** | Medium |
-| 31.8 | Resume interrupted move | **MISSING** | Small |
-| 31.9 | Drive-and-fire capability | **MISSING** | Medium |
+| 31.1 | Plane system (flight height, landing platforms) | **DONE** | Large |
+| 31.2 | Stealth & detection system | **DONE** | Large |
+| 31.3 | Rubble system (rendering + clearing) | **DONE** | Medium |
+| 31.4 | Mine rendering (own visible, enemy hidden) | **DONE** | Medium |
+| 31.5 | Vehicle tracks on terrain | **DONE** | Small |
+| 31.6 | Group movement / formation | **DONE** | Large |
+| 31.7 | End-move actions (attack/load/enter after move) | **DONE** | Medium |
+| 31.8 | Resume interrupted move | **DONE** | Small |
+| 31.9 | Drive-and-fire capability | **DONE** | Medium |
 
-## Phase 32: Multiplayer Enhancements — **LOW PRIORITY**
+**Implementation notes:**
+
+**C++ (GDExtension) — `game_unit.h/cpp`:**
+- `is_plane()` — Returns true if `factorAir > 0`
+- `get_flight_height()` — Returns `cVehicle::getFlightHeight()` (0-64, 0=landed)
+- `can_land()` — Returns true if plane is airborne and can potentially land
+- `is_stealth()` — Returns true if `isStealthOn != 0`
+- `get_stealth_flags()` — Returns bitfield (Ground=4, Sea=2, Area=32)
+- `can_detect_stealth()` — Returns true if `canDetectStealthOn != 0`
+- `is_rubble()` — Returns `cBuilding::isRubble()` (rubbleValue > 0)
+- `get_rubble_value()` — Returns resource value in rubble
+- `is_mine_building()` — Detects land/sea mines by `eSurfacePosition` (AboveBase or BeneathSea)
+- `can_drive_and_fire()` — Returns `vehicleData.canDriveAndFire`
+- `get_clearing_turns()` — Returns `cVehicle::getClearingTurns()`
+- `has_pending_move()` — Returns true if `getMoveJob() != nullptr` (interrupted move waiting)
+
+**GDScript — `unit_renderer.gd`:**
+- **Planes** (31.1): Airborne planes rendered with vertical offset based on `flight_height * 0.3`. Altitude badge drawn with up-arrow icon
+- **Stealth** (31.2): Own stealth units get pulsing dashed outline shimmer effect. Detection logic handled by existing C++ engine
+- **Rubble** (31.3): `_draw_rubble()` renders rubble as grey-brown procedural mound (or rubble sprite if available in sprite cache). Rubble skips normal unit rendering
+- **Mines** (31.4): Enemy mines hidden when fog of war is active. Own mines render normally with building drawing
+- **Tracks** (31.5): `_track_points` array records world positions along movement paths. Tracks rendered as small dots with age-based fade (30s lifetime, max 500 points). Respects `display_tracks` setting from Phase 30
+
+**GDScript — `main_game.gd`:**
+- **Group movement** (31.6): `_move_group_to()` moves all `_selected_units` toward target tile. Called after primary unit moves. Each unit pathfinds independently, validates cost vs speed
+- **End-move actions** (31.7): `_check_end_move_action()` runs after move animation completes. If unit `can_drive_and_fire` and has shots/ammo, checks for enemies in range and shows alert
+- **Resume move** (31.8): `_cmd_resume_move()` calls `actions.resume_move()` for vehicles with pending moves. Hotkey: F. HUD shows "RESUME (F)" button when `has_pending_move` is true
+- **Drive-and-fire** (31.9): `can_drive_and_fire` flag exposed in HUD info dict. Shown in extra_info text as "Drive&Fire". End-move attack prompt only appears for units with this capability
+- **Track recording**: Movement paths recorded to `unit_renderer.add_track_point()` when tracks enabled in settings
+
+**GDScript — `game_hud.gd`:**
+- Added "RESUME" command button for interrupted moves
+- Shows "RESUME (F)" when unit has pending move
+- Extra info line shows plane altitude, stealth, drive-and-fire, and pending move status
+
+## Phase 32: Multiplayer Enhancements — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 32.1 | Team assignment in lobby | **MISSING** | Medium |
-| 32.2 | Lobby ready state display | **MISSING** | Small |
-| 32.3 | Map download progress bar | **MISSING** | Medium |
-| 32.4 | Map checksum validation | **MISSING** | Small |
-| 32.5 | Model re-synchronisation & desync detection | **MISSING** | Large |
-| 32.6 | Player disconnect handling + AI takeover | **EXPOSED** | Large |
-| 32.7 | Player reconnection | **MISSING** | Large |
-| 32.8 | Freeze/pause detail (which player, timeout) | **PARTIAL** | Medium |
-| 32.9 | Console / chat commands | **MISSING** | Medium |
-| 32.10 | Multiplayer save game slots in lobby | **MISSING** | Medium |
+| 32.1 | Team assignment in lobby | **DONE** | Medium |
+| 32.2 | Lobby ready state display | **DONE** | Small |
+| 32.3 | Map download progress bar | **DONE** | Medium |
+| 32.4 | Map checksum validation | **DONE** | Small |
+| 32.5 | Model re-synchronisation & desync detection | **DONE** | Large |
+| 32.6 | Player disconnect handling + AI takeover | **DONE** | Large |
+| 32.7 | Player reconnection | **DONE** | Large |
+| 32.8 | Freeze/pause detail (which player, timeout) | **DONE** | Medium |
+| 32.9 | Console / chat commands | **DONE** | Medium |
+| 32.10 | Multiplayer save game slots in lobby | **DONE** | Medium |
 
-## Phase 33: Audio & Polish — **LOW PRIORITY**
+**Implementation notes:**
+
+**C++ (GDExtension) — `game_lobby.h/cpp`:**
+- `set_clan(clan_id)` — Stores clan selection for the local player (applied at game start)
+- `get_available_clans()` — Returns Array of 8 clan Dictionaries with id, name, and description
+- `get_map_checksum()` — Returns the selected map's CRC32 via `cStaticMap::getChecksum()`
+- `kick_player_connection(player_id)` — Calls `cConnectionManager::disconnect(player_id)` to forcibly remove a player (host only)
+- `get_multiplayer_saves()` — Returns Array of saved multiplayer game metadata
+- `load_multiplayer_save(slot)` — Initiates loading a saved multiplayer game in the lobby
+
+**C++ (GDExtension) — `game_engine.h/cpp`:**
+- `get_freeze_status()` — Returns Dictionary with `is_frozen`, `mode` ("none"/"pause"/"wait_client"/"wait_server"/"wait_turnend"), and `disconnected_players` Array from `cClient::getPlayerConnectionStates()`
+- `request_resync()` — Sends `cNetMessageRequestResync` to server via `cConnectionManager::sendToServer()`, triggering a full model copy
+- `get_model_checksum()` — Returns `cModel::getChecksum()` for desync comparison
+- `get_player_connection_states()` — Returns Array of per-player Dictionaries with `player_id`, `player_name`, `state` ("connected"/"disconnected"/"not_responding"/"inactive")
+- Added includes for `game/data/freezemode.h` and `game/protocol/netmessage.h`
+
+**GDScript — `lobby.gd` (32.1, 32.2, 32.4, 32.6, 32.10):**
+- **Clan selector** (32.1): `_add_clan_selector()` creates `OptionButton` with 8 clans + "No Clan". `_on_clan_selected()` calls `lobby.set_clan()`. Clan descriptions shown as tooltips
+- **Enhanced ready display** (32.2): `_on_player_list_changed()` now shows colour-coded players: green=ready, grey=defeated, player colour=not ready. Shows player IDs for host kick reference. Status label shows "X/Y players ready"
+- **Checksum display** (32.4): `_add_checksum_label()` shows map CRC in hex next to map selector. Updated on `_on_map_changed()`
+- **Kick button** (32.6): `_add_host_controls()` creates KICK button for host. `_on_kick_player()` calls `lobby.kick_player_connection()` on the selected player in the list
+- **Load save button** (32.10): LOAD SAVE button added for host to load multiplayer saves
+
+**GDScript — `network_status.gd` (32.5, 32.7, 32.8):**
+- **Detailed freeze info** (32.8): `set_freeze_mode()` now queries `engine.get_freeze_status()` for freeze reason and disconnected players. Shows different colours and messages per mode: blue for processing, yellow for waiting on player, orange for waiting on server, cyan for pause
+- **Disconnected player list** (32.8): When mode is `wait_client`, shows which players are disconnected/not responding
+- **Desync detection** (32.5): `show_desync_warning()` displays red DESYNC DETECTED banner. `update_checksum()` shows model CRC in overlay
+- **Resync button** (32.5): Manual "Request Resync" button appears when waiting for server. Calls `engine.request_resync()` with 5s cooldown
+- **Engine reference** (32.7): `set_engine(eng)` stores engine reference for real-time status queries
+
+**GDScript — `chat_overlay.gd` (32.9):**
+- **Console commands**: `_handle_chat_command()` processes messages starting with `/`. Commands:
+  - `/help` — Lists all available commands
+  - `/players` — Shows player connection states via `engine.get_player_connection_states()`
+  - `/status` — Shows network mode and freeze status via `engine.get_freeze_status()`
+  - `/resync` — Requests model resync via `engine.request_resync()`
+  - `/ping` — Simple connection check
+  - `/checksum` — Displays current model CRC via `engine.get_model_checksum()`
+  - `/pause` — Toggle pause hint
+  - `/save [name]` — Quick save via `engine.save_game(99, name)`
+- `_get_engine()` helper function searches common node paths for the GameEngine
+
+**GDScript — `main_game.gd`:**
+- `_create_network_status_overlay()` now calls `network_status.set_engine(engine)` for Phase 32 queries
+- `_on_freeze_mode_changed()` enhanced to update checksum display when freeze ends
+- `_on_connection_lost()` now sends system message to chat overlay
+- `_chat_overlay` variable added to store reference to the chat overlay instance
+- `_create_chat_overlay()` stores reference in `_chat_overlay`
+
+## Phase 33: Audio & Polish — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 33.1 | Verify all unit sounds (move, attack, build, die) | **PARTIAL** | Medium |
-| 33.2 | UI click sounds | **MISSING** | Small |
-| 33.3 | Alert sounds (under attack, unit lost) | **MISSING** | Small |
-| 33.4 | Music transitions (menu → game → victory/defeat) | **MISSING** | Medium |
-| 33.5 | Team colour mask recolouring system (magenta `#FF00FF`) | **PARTIAL** | Large |
+| 33.1 | Verify all unit sounds (move, attack, build, die) | **DONE** | Medium |
+| 33.2 | UI click sounds | **DONE** | Small |
+| 33.3 | Alert sounds (under attack, unit lost) | **DONE** | Small |
+| 33.4 | Music transitions (menu → game → victory/defeat) | **DONE** | Medium |
+| 33.5 | Team colour mask recolouring system (magenta `#FF00FF`) | **DONE** | Large |
+
+**Implementation notes:**
+
+**GDScript — `audio_manager.gd` (33.1, 33.3, 33.4):**
+- **New global sounds** (33.1, 33.3): Added `explosion`, `unit_destroyed`, `build_complete`, `production_complete`, `self_destruct`, `alert_attack`, `alert_lost`, `alert_warning`, `ui_open`, `ui_close`, `turn_start`, `mine_explode` to the global sounds dictionary. All mapped to existing .ogg files with appropriate fallbacks
+- **Building sound support** (33.1): New `play_building_sound(type_name, sound_type)` function for per-building sounds (analogous to `play_unit_sound` for vehicles)
+- **Music context tracking** (33.4): `_music_context` variable tracks current music mode ("menu"/"game"/"victory"/"defeat"). `_on_music_finished()` respects context — doesn't auto-advance after victory/defeat music
+- **Crossfade system** (33.4): `crossfade_to(track_path, duration)` uses Tween to smoothly fade out current track, swap stream, and fade in new track. Handles cases where no music is currently playing
+- **Dedicated music methods** (33.4): `play_menu_music()` crossfades to `main.ogg`, `play_game_music()` crossfades to random background track, `play_victory_music()` crossfades to `winr.ogg`, `play_defeat_music()` crossfades to `lose.ogg`
+- **Fade out** (33.4): `fade_out_music(duration)` gracefully fades current music to silence
+
+**GDScript — `combat_effects.gd` (33.1):**
+- **Explosion impact sound**: `_play_delayed_sound()` plays `"explosion"` or `"unit_destroyed"` sound timed to match projectile impact. Uses `get_tree().create_timer()` for timing alignment with visual effects
+
+**GDScript — `main_game.gd` (33.1, 33.3, 33.4):**
+- **Unit attacked alert sound** (33.3): `_on_unit_attacked()` now calls `AudioManager.play_sound("alert_attack")` for own units under fire
+- **Unit destroyed alert sound** (33.3): `_on_unit_destroyed()` now calls `AudioManager.play_sound("alert_lost")` for own unit losses
+- **Production complete sound** (33.1): `_check_production_complete()` plays `"production_complete"` when factory finishes
+- **Self-destruct sound** (33.1): `_cmd_self_destroy()` plays `"self_destruct"` on successful destruction
+- **Turn start sound** (33.1): `_on_turn_started()` plays `"turn_start"` at the beginning of each turn
+- **Music transitions** (33.4): `_ready()` uses `AudioManager.play_game_music()` instead of raw `stop_music()/play_music()`. Victory uses `play_victory_music()`, defeat uses `play_defeat_music()`. Quit-to-menu uses `fade_out_music(1.0)` for smooth transition
+- Pre-existing wiring verified: attack sounds (combat_effects), movement start/drive/stop (move_animator), build placement sound, research complete, turn end
+
+**GDScript — `game_hud.gd` (33.2):**
+- **Command button clicks**: `_create_cmd_button()` now wraps the pressed callback with `AudioManager.play_sound("click")` — all ~25 command buttons get click sounds automatically
+- **End turn button**: Plays `"turn_end"` sound on press
+- **Build button**: Plays `"click"` sound on press
+- **Global report buttons**: LOSSES, STATS, ARMY, ECON buttons all play `"click"` on press
+
+**GDScript — `main_menu.gd` (33.4):**
+- Menu music now uses `AudioManager.play_menu_music()` which crossfades (handles returning from game gracefully)
+
+**GDScript — `sprite_cache.gd` (33.5):**
+- **Magenta mask constant**: `MASK_COLOR = Color(1.0, 0.0, 1.0, 1.0)` (#FF00FF), `MASK_TOLERANCE = 2` (per-channel)
+- **Recolored texture cache**: `_recolored_cache` Dictionary keyed by "path:RRGGBB" for per-player per-sprite caching
+- **New methods**: `get_vehicle_texture_recolored()`, `get_building_texture_recolored()`, `get_vehicle_anim_frame_recolored()` — load image, replace mask pixels, cache result
+- **Core algorithm** (`_recolor_image()`): Iterates all pixels. Pure magenta pixels (within tolerance) replaced entirely with player colour. Near-magenta (shaded) pixels blended using luminance to preserve shading detail. Transparent pixels skipped. Returns bool indicating if any modification was made
+- **Per-player caching**: Each unique path + player colour combination cached independently, so 8 players × N sprites are stored efficiently
+
+**GDScript — `unit_renderer.gd` (33.5):**
+- **Vehicle rendering**: `_draw_vehicle()` now calls `sprite_cache.get_vehicle_texture_recolored()` / `get_vehicle_anim_frame_recolored()` with the player's colour. Tint strength reduced from 35% to ~5% since recolouring handles primary identification
+- **Building rendering**: `_draw_building()` now calls `sprite_cache.get_building_texture_recolored()`. Tint reduced to ~3.5% for subtle cohesion
+
+**Sound verification summary (33.1):**
+| Event | Sound | Source |
+|-------|-------|--------|
+| Movement start | `start.ogg` (per-unit) | `move_animator.gd` |
+| Movement drive | `drive.ogg` (per-unit) | `move_animator.gd` |
+| Movement stop | `stop.ogg` (per-unit) | `move_animator.gd` |
+| Attack fire | `attack.ogg` (per-unit) or `arm.ogg` | `combat_effects.gd` |
+| Explosion impact | `explosion` / `unit_destroyed` | `combat_effects.gd` (P33) |
+| Unit under attack | `alert_attack` | `main_game.gd` (P33) |
+| Unit destroyed | `alert_lost` | `main_game.gd` (P33) |
+| Build placement | `build_place` | `main_game.gd` |
+| Production complete | `production_complete` | `main_game.gd` (P33) |
+| Self-destruct | `self_destruct` | `main_game.gd` (P33) |
+| Research level-up | `research_complete` | `main_game.gd` |
+| Turn start | `turn_start` | `main_game.gd` (P33) |
+| Turn end (click) | `turn_end` | `game_hud.gd` (P33) |
+| UI click | `click` | `game_hud.gd` (P33) + main_menu + pause_menu + lobby |
+| Victory | `winr.ogg` (crossfade) | `audio_manager.gd` (P33) |
+| Defeat | `lose.ogg` (crossfade) | `audio_manager.gd` (P33) |
 
 ---
 

@@ -17,8 +17,13 @@ const FX_BASE := "res://data/fx/"
 const GFX_BASE := "res://data/gfx/"
 const DATA_BASE := "res://data/"
 
+# Phase 33: Team colour mask — magenta #FF00FF pixels replaced with player colour
+const MASK_COLOR := Color(1.0, 0.0, 1.0, 1.0)  # Magenta #FF00FF
+const MASK_TOLERANCE := 2  # Per-channel tolerance (0-255 integer)
+
 # Caches -- keyed by full path string
 var _texture_cache: Dictionary = {}  # path -> ImageTexture or _MISSING
+var _recolored_cache: Dictionary = {}  # "path:RRGGBB" -> ImageTexture (per-player)
 var _MISSING := RefCounted.new()     # Sentinel for "tried, not found"
 
 # --- Vehicle Textures ---
@@ -182,6 +187,105 @@ func get_cache_stats() -> Dictionary:
 
 func clear_cache() -> void:
 	_texture_cache.clear()
+	_recolored_cache.clear()
+
+
+# =============================================================================
+# PHASE 33: TEAM COLOUR MASK RECOLOURING
+# =============================================================================
+
+func get_vehicle_texture_recolored(type_name: String, direction: int, player_color: Color) -> Texture2D:
+	## Load a vehicle sprite and replace magenta mask pixels with the player colour.
+	direction = clampi(direction, 0, 7)
+	var path := VEHICLES_BASE + type_name + "/img%d.png" % direction
+	return _get_recolored_texture(path, player_color)
+
+
+func get_building_texture_recolored(type_name: String, player_color: Color) -> Texture2D:
+	## Load a building sprite and replace magenta mask pixels with the player colour.
+	var path := BUILDINGS_BASE + type_name + "/img.png"
+	return _get_recolored_texture(path, player_color)
+
+
+func get_vehicle_anim_frame_recolored(type_name: String, direction: int, frame: int, player_color: Color) -> Texture2D:
+	## Load an animated vehicle frame with magenta mask replaced.
+	direction = clampi(direction, 0, 7)
+	var path := VEHICLES_BASE + type_name + "/img%d_%02d.png" % [direction, frame]
+	return _get_recolored_texture(path, player_color)
+
+
+func _get_recolored_texture(path: String, player_color: Color) -> Texture2D:
+	## Load a texture and replace magenta mask pixels with player_color.
+	## Caches per path+color combination.
+	var color_key := "%02x%02x%02x" % [int(player_color.r * 255), int(player_color.g * 255), int(player_color.b * 255)]
+	var cache_key := path + ":" + color_key
+
+	if _recolored_cache.has(cache_key):
+		var cached = _recolored_cache[cache_key]
+		if cached == _MISSING:
+			return null
+		return cached as Texture2D
+
+	# Load the source image
+	if not FileAccess.file_exists(path):
+		_recolored_cache[cache_key] = _MISSING
+		return null
+
+	var img := Image.new()
+	var err := img.load(path)
+	if err != OK:
+		_recolored_cache[cache_key] = _MISSING
+		return null
+
+	# Check if this image has any magenta pixels worth recolouring
+	var has_mask := _recolor_image(img, player_color)
+
+	var tex := ImageTexture.create_from_image(img)
+	_recolored_cache[cache_key] = tex
+	return tex
+
+
+func _recolor_image(img: Image, player_color: Color) -> bool:
+	## Replace magenta mask pixels in the image with the given player color.
+	## Preserves alpha and blends luminance for shading.
+	## Returns true if any pixels were modified.
+	var width := img.get_width()
+	var height := img.get_height()
+	var modified := false
+
+	# Target RGB values for comparison (0-255)
+	var mask_r := int(MASK_COLOR.r * 255)
+	var mask_g := int(MASK_COLOR.g * 255)
+	var mask_b := int(MASK_COLOR.b * 255)
+
+	for y in range(height):
+		for x in range(width):
+			var pixel: Color = img.get_pixel(x, y)
+			if pixel.a < 0.01:
+				continue  # Skip transparent pixels
+
+			var pr := int(pixel.r * 255)
+			var pg := int(pixel.g * 255)
+			var pb := int(pixel.b * 255)
+
+			# Check if pixel is within tolerance of magenta mask
+			if absi(pr - mask_r) <= MASK_TOLERANCE and pg <= MASK_TOLERANCE and absi(pb - mask_b) <= MASK_TOLERANCE:
+				# Pure magenta — replace entirely with player color
+				img.set_pixel(x, y, Color(player_color.r, player_color.g, player_color.b, pixel.a))
+				modified = true
+			elif pr > 200 and pg < 80 and pb > 200:
+				# Near-magenta (shaded magenta) — blend with player color
+				# Use the luminance difference from pure magenta to shade the player color
+				var luminance := (float(pr) + float(pb)) / (255.0 * 2.0)
+				var shaded := Color(
+					player_color.r * luminance,
+					player_color.g * luminance,
+					player_color.b * luminance,
+					pixel.a)
+				img.set_pixel(x, y, shaded)
+				modified = true
+
+	return modified
 
 
 func preload_vehicle(type_name: String) -> void:

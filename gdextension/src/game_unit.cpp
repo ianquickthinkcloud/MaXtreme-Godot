@@ -128,6 +128,20 @@ void GameUnit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("can_build_path"), &GameUnit::can_build_path);
     ClassDB::bind_method(D_METHOD("get_connection_flags"), &GameUnit::get_connection_flags);
     ClassDB::bind_method(D_METHOD("get_max_build_factor"), &GameUnit::get_max_build_factor);
+
+    // Phase 31: Advanced Unit Features
+    ClassDB::bind_method(D_METHOD("is_plane"), &GameUnit::is_plane);
+    ClassDB::bind_method(D_METHOD("get_flight_height"), &GameUnit::get_flight_height);
+    ClassDB::bind_method(D_METHOD("can_land"), &GameUnit::can_land);
+    ClassDB::bind_method(D_METHOD("is_stealth"), &GameUnit::is_stealth);
+    ClassDB::bind_method(D_METHOD("get_stealth_flags"), &GameUnit::get_stealth_flags);
+    ClassDB::bind_method(D_METHOD("can_detect_stealth"), &GameUnit::can_detect_stealth);
+    ClassDB::bind_method(D_METHOD("is_rubble"), &GameUnit::is_rubble);
+    ClassDB::bind_method(D_METHOD("get_rubble_value"), &GameUnit::get_rubble_value);
+    ClassDB::bind_method(D_METHOD("is_mine_building"), &GameUnit::is_mine_building);
+    ClassDB::bind_method(D_METHOD("can_drive_and_fire"), &GameUnit::can_drive_and_fire);
+    ClassDB::bind_method(D_METHOD("get_clearing_turns"), &GameUnit::get_clearing_turns);
+    ClassDB::bind_method(D_METHOD("has_pending_move"), &GameUnit::has_pending_move);
 }
 
 GameUnit::GameUnit() {}
@@ -803,4 +817,83 @@ Dictionary GameUnit::get_connection_flags() const {
 int GameUnit::get_max_build_factor() const {
     if (!unit) return 0;
     return unit->getStaticUnitData().buildingData.maxBuildFactor;
+}
+
+// ========== PHASE 31: ADVANCED UNIT FEATURES ==========
+
+bool GameUnit::is_plane() const {
+    if (!unit) return false;
+    return unit->getStaticUnitData().factorAir > 0;
+}
+
+int GameUnit::get_flight_height() const {
+    auto* v = as_vehicle();
+    if (!v) return 0;
+    return v->getFlightHeight();
+}
+
+bool GameUnit::can_land() const {
+    auto* v = as_vehicle();
+    if (!v) return false;
+    if (v->getStaticUnitData().factorAir <= 0) return false;
+    // canLand requires a map reference — check via model
+    // For now, return true if the plane is in the air (has flight height > 0)
+    return v->getFlightHeight() > 0;
+}
+
+bool GameUnit::is_stealth() const {
+    if (!unit) return false;
+    return unit->getStaticUnitData().isStealthOn != 0;
+}
+
+int GameUnit::get_stealth_flags() const {
+    if (!unit) return 0;
+    return static_cast<int>(unit->getStaticUnitData().isStealthOn);
+}
+
+bool GameUnit::can_detect_stealth() const {
+    if (!unit) return false;
+    return unit->getStaticUnitData().canDetectStealthOn != 0;
+}
+
+bool GameUnit::is_rubble() const {
+    auto* b = as_building();
+    if (!b) return false;
+    return b->isRubble();
+}
+
+int GameUnit::get_rubble_value() const {
+    auto* b = as_building();
+    if (!b) return 0;
+    if (!b->isRubble()) return 0;
+    return b->getRubbleValue();
+}
+
+bool GameUnit::is_mine_building() const {
+    auto* b = as_building();
+    if (!b) return false;
+    const auto& sd = b->getStaticUnitData();
+    // Mines have surface position AboveBase (land mine) or BeneathSea (sea mine)
+    return sd.surfacePosition == eSurfacePosition::AboveBase ||
+           sd.surfacePosition == eSurfacePosition::BeneathSea;
+}
+
+bool GameUnit::can_drive_and_fire() const {
+    auto* v = as_vehicle();
+    if (!v) return false;
+    return v->getStaticUnitData().vehicleData.canDriveAndFire;
+}
+
+int GameUnit::get_clearing_turns() const {
+    auto* v = as_vehicle();
+    if (!v) return 0;
+    return v->getClearingTurns();
+}
+
+bool GameUnit::has_pending_move() const {
+    // A vehicle has a pending move if it's in a move job with Waiting state
+    // We can check this via the unit's getMoveJob() if available
+    auto* v = as_vehicle();
+    if (!v) return false;
+    return v->getMoveJob() != nullptr;
 }

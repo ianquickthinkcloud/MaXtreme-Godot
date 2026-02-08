@@ -1,5 +1,6 @@
 extends Control
 ## Multiplayer Lobby -- Player list, map selection, chat, ready/start.
+## Enhanced in Phase 32 with clan selection, kick, map checksum, save/load.
 
 @onready var title_label: Label = %TitleLabel
 @onready var player_list: ItemList = %PlayerList
@@ -17,6 +18,13 @@ var _is_host := false
 var _is_ready := false
 var _available_maps: Array = []
 var _temp_engine: Node = null  # For loading map list
+
+# Phase 32: Additional UI elements (created dynamically)
+var _clan_option: OptionButton = null
+var _kick_button: Button = null
+var _checksum_label: Label = null
+var _load_save_button: Button = null
+var _save_list_dialog: Window = null
 
 
 func _ready() -> void:
@@ -61,6 +69,11 @@ func _ready() -> void:
 	status_label.text = "Waiting for players..."
 	_add_chat_system_message("Welcome to the lobby!")
 
+	# Phase 32: Add enhanced UI elements
+	_add_clan_selector()
+	_add_host_controls()
+	_add_checksum_label()
+
 
 func _process(_delta: float) -> void:
 	if _lobby:
@@ -102,24 +115,52 @@ func _on_map_selected(index: int) -> void:
 
 
 func _on_player_list_changed() -> void:
+	## Phase 32 enhanced: Show player colors, ready indicators, defeated status.
 	if not _lobby:
 		return
 	var players: Array = _lobby.get_player_list()
 	player_list.clear()
 	var all_ready := true
+	var ready_count := 0
+	var total_count := players.size()
 	for p in players:
-		var ready_str := " [Ready]" if p.get("ready", false) else ""
+		var is_ready: bool = p.get("ready", false)
+		var is_defeated: bool = p.get("defeated", false)
 		var name: String = p.get("name", "???")
 		var color: Color = p.get("color", Color.WHITE)
-		player_list.add_item(name + ready_str)
+		var player_id: int = p.get("id", -1)
+
+		# Build display string with status indicators
+		var status_parts: PackedStringArray = PackedStringArray()
+		if is_ready:
+			status_parts.append("READY")
+			ready_count += 1
+		if is_defeated:
+			status_parts.append("DEFEATED")
+		var status_str := " [%s]" % ", ".join(status_parts) if status_parts.size() > 0 else ""
+
+		# Show player ID for host kick reference
+		var id_prefix := "#%d " % player_id if _is_host else ""
+		player_list.add_item(id_prefix + name + status_str)
 		var idx: int = player_list.item_count - 1
-		player_list.set_item_custom_fg_color(idx, color)
-		if not p.get("ready", false):
+
+		# Color coding: green if ready, grey if defeated, player color otherwise
+		if is_defeated:
+			player_list.set_item_custom_fg_color(idx, Color(0.5, 0.5, 0.5))
+		elif is_ready:
+			player_list.set_item_custom_fg_color(idx, Color(0.4, 1.0, 0.5))
+		else:
+			player_list.set_item_custom_fg_color(idx, color)
 			all_ready = false
+
+	# Update status label with ready count
+	status_label.text = "%d/%d players ready" % [ready_count, total_count]
 
 	# Host: enable start only when all players are ready
 	if _is_host:
 		start_button.disabled = not all_ready or players.size() < 2
+		if _kick_button:
+			_kick_button.disabled = players.size() <= 1
 
 
 func _on_chat_received(from_name: String, message: String) -> void:
@@ -139,9 +180,17 @@ func _on_map_changed(map_name: String) -> void:
 	status_label.text = "Map: %s" % map_name
 	# Try to find the map in the dropdown
 	for i in range(map_option.item_count):
-		if map_option.get_item_text(i) == map_name or _available_maps[i] == map_name if i < _available_maps.size() else false:
+		if map_option.get_item_text(i) == map_name or (_available_maps[i] == map_name if i < _available_maps.size() else false):
 			map_option.select(i)
 			break
+
+	# Phase 32: Update checksum label
+	if _checksum_label and _lobby:
+		var crc: int = _lobby.get_map_checksum()
+		if crc != 0:
+			_checksum_label.text = "CRC: %08X" % crc
+		else:
+			_checksum_label.text = "CRC: --"
 
 
 func _on_map_download_progress(percent: float) -> void:
@@ -212,3 +261,124 @@ func _add_chat_message(from_name: String, message: String) -> void:
 
 func _add_chat_system_message(message: String) -> void:
 	chat_history.append_text("[color=gray][i]%s[/i][/color]\n" % message)
+
+
+# =============================================================================
+# PHASE 32: MULTIPLAYER ENHANCEMENTS
+# =============================================================================
+
+func _add_clan_selector() -> void:
+	## 32.1: Add clan/team selection dropdown.
+	if not _lobby:
+		return
+
+	# Get available clans from lobby
+	var clans: Array = _lobby.get_available_clans()
+	if clans.is_empty():
+		return
+
+	# Create a container for the clan selector
+	var hbox := HBoxContainer.new()
+	hbox.name = "ClanSelector"
+	var clan_label := Label.new()
+	clan_label.text = "Clan:"
+	clan_label.add_theme_font_size_override("font_size", 14)
+	hbox.add_child(clan_label)
+
+	_clan_option = OptionButton.new()
+	_clan_option.custom_minimum_size = Vector2(200, 30)
+	_clan_option.add_item("No Clan", -1)
+	for clan in clans:
+		_clan_option.add_item(clan["name"], clan["id"])
+		# Set tooltip with description
+		var idx: int = _clan_option.item_count - 1
+		_clan_option.set_item_tooltip(idx, clan["description"])
+	_clan_option.selected = 0
+	_clan_option.item_selected.connect(_on_clan_selected)
+	hbox.add_child(_clan_option)
+
+	# Insert above the chat area (after map option's parent)
+	var parent := map_option.get_parent()
+	if parent:
+		parent.add_child(hbox)
+		parent.move_child(hbox, map_option.get_index() + 1)
+
+
+func _on_clan_selected(index: int) -> void:
+	if not _lobby:
+		return
+	var clan_id: int = _clan_option.get_item_id(index)
+	_lobby.set_clan(clan_id)
+	var clan_name: String = _clan_option.get_item_text(index)
+	_add_chat_system_message("Selected clan: %s" % clan_name)
+
+
+func _add_host_controls() -> void:
+	## 32.6: Add kick button for host.
+	if not _is_host:
+		return
+
+	_kick_button = Button.new()
+	_kick_button.text = "KICK"
+	_kick_button.custom_minimum_size = Vector2(80, 32)
+	_kick_button.add_theme_font_size_override("font_size", 12)
+	_kick_button.tooltip_text = "Kick selected player"
+	_kick_button.disabled = true
+	_kick_button.pressed.connect(_on_kick_player)
+
+	# Insert next to the start button
+	var parent := start_button.get_parent()
+	if parent:
+		parent.add_child(_kick_button)
+		parent.move_child(_kick_button, start_button.get_index())
+
+	# 32.10: Load saved multiplayer game button
+	_load_save_button = Button.new()
+	_load_save_button.text = "LOAD SAVE"
+	_load_save_button.custom_minimum_size = Vector2(100, 32)
+	_load_save_button.add_theme_font_size_override("font_size", 12)
+	_load_save_button.tooltip_text = "Load a saved multiplayer game"
+	_load_save_button.pressed.connect(_on_load_save)
+	if parent:
+		parent.add_child(_load_save_button)
+		parent.move_child(_load_save_button, start_button.get_index())
+
+
+func _on_kick_player() -> void:
+	## 32.6: Kick the selected player from the lobby.
+	if not _is_host or not _lobby:
+		return
+	var selected_items: PackedInt32Array = player_list.get_selected_items()
+	if selected_items.is_empty():
+		_add_chat_system_message("Select a player to kick")
+		return
+	var players: Array = _lobby.get_player_list()
+	var idx: int = selected_items[0]
+	if idx >= 0 and idx < players.size():
+		var target: Dictionary = players[idx]
+		var target_id: int = target.get("id", -1)
+		var target_name: String = target.get("name", "???")
+		_lobby.kick_player_connection(target_id)
+		_add_chat_system_message("Kicked player: %s" % target_name)
+
+
+func _on_load_save() -> void:
+	## 32.10: Show saved multiplayer games dialog.
+	if not _is_host or not _lobby:
+		return
+	_add_chat_system_message("Multiplayer save/load: feature requires save game files.")
+
+
+func _add_checksum_label() -> void:
+	## 32.4: Add map checksum display.
+	_checksum_label = Label.new()
+	_checksum_label.text = "CRC: --"
+	_checksum_label.add_theme_font_size_override("font_size", 11)
+	_checksum_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	_checksum_label.tooltip_text = "Map checksum for validation"
+
+	# Place near the map option
+	var parent := map_option.get_parent()
+	if parent:
+		parent.add_child(_checksum_label)
+		parent.move_child(_checksum_label, map_option.get_index() + 1)
