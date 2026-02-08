@@ -1,9 +1,34 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-07
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
+
+---
+
+## Phase Progress Overview
+
+| Phase | Name | Status | Items |
+|-------|------|--------|-------|
+| 18 | Pre-Game Setup Flow | DONE | 10/10 |
+| 19 | Core Unit Actions | DONE | 13/13 |
+| 20 | In-Game Information & HUD | DONE | 10/10 |
+| 21 | Research & Upgrades | DONE | 7/7 |
+| 22 | Mining, Resources & Economy | DONE | 6/6 |
+| 23 | Notifications & Event Log | DONE | 7/7 |
+| **24** | **Save/Load System** | **UP NEXT** | **0/5** |
+| 25 | Map Overlays & Toggles | TODO | 0/10 |
+| 26 | Construction & Building Enhancements | TODO | 0/7 |
+| 27 | End-Game | TODO | 0/8 |
+| 28 | Reports & Statistics | TODO | 0/4 |
+| 29 | Keyboard Shortcuts & UX | TODO | 0/6 |
+| 30 | Preferences & Settings | TODO | 0/6 |
+| 31 | Advanced Unit Features | TODO | 0/9 |
+| 32 | Multiplayer Enhancements | TODO | 0/10 |
+| 33 | Audio & Polish | TODO | 0/5 |
+
+**Completed: 6 phases (53 items) | Remaining: 10 phases (70 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -586,17 +611,32 @@ positions along the horizontal center of the map. Players have no choice.
 - Energy warning: on turn start, checks energy balance and shows orange/red warning toast if `need > production`
 - Sub-base panel: "BASES" button opens scrollable panel showing each sub-base's storage, net production, energy balance, and human counts
 
-## Phase 23: Notifications & Event Log — **MEDIUM PRIORITY**
+## Phase 23: Notifications & Event Log — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 23.1 | "Unit under attack" alert with camera jump | **MISSING** | Medium |
-| 23.2 | "Unit destroyed" alert | **MISSING** | Small |
-| 23.3 | "Production complete" notification | **MISSING** | Small |
-| 23.4 | "Research complete" notification | **MISSING** | Small |
-| 23.5 | Resource warnings (low, insufficient) | **MISSING** | Small |
-| 23.6 | Scrollable event log with jump-to-location | **MISSING** | Medium |
-| 23.7 | New turn report summary | **MISSING** | Medium |
+| 23.1 | "Unit under attack" alert with camera jump | **DONE** | Medium |
+| 23.2 | "Unit destroyed" alert | **DONE** | Small |
+| 23.3 | "Production complete" notification | **DONE** | Small |
+| 23.4 | "Research complete" notification | **DONE** | Small |
+| 23.5 | Resource warnings (low, insufficient) | **DONE** | Small |
+| 23.6 | Scrollable event log with jump-to-location | **DONE** | Medium |
+| 23.7 | New turn report summary | **DONE** | Medium |
+
+**Implementation notes:**
+
+**C++ (GDExtension):**
+- Refactored signal wiring into `GameEngine::connect_model_signals()` helper (eliminates 5x duplication)
+- New Godot signals: `unit_attacked(player_id, unit_id, name, pos)`, `unit_destroyed(player_id, unit_id, name, pos)`, `unit_disabled(unit_id, name, pos)`, `build_error(player_id, error_type)`, `sudden_death()`
+- Connected `cPlayer::unitAttacked`, `cPlayer::unitDestroyed`, `cPlayer::buildErrorBuildPositionBlocked`, `cPlayer::buildErrorInsufficientMaterial`, `cModel::unitDisabled`, `cModel::suddenDeathMode`
+
+**GDScript:**
+- Alert system: queued alert display with auto-camera-jump, fade-out animation, sequential queue processing
+- Event log: scrollable "LOG" panel with timestamped entries, "> jump" buttons for positioned events, Clear button
+- Turn report: popup panel on turn start summarising research completions, energy/resource shortages, worker shortages
+- Production complete: detected by checking factory build list state at turn start
+- Resource warnings: per-resource low/insufficient checks added to event log on turn start
+- Build error alerts: "position blocked" and "insufficient material" shown as orange alerts
 
 ## Phase 24: Save/Load System — **MEDIUM PRIORITY**
 

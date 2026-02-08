@@ -56,6 +56,10 @@ private:
     /// Returns the active cModel* regardless of mode.
     cModel* get_active_model() const;
 
+    /// Connect all model + player signals to Godot signals.
+    /// Called from every game init path (new_game, load_game, lobby handoff).
+    void connect_model_signals(cModel* m);
+
 protected:
     static void _bind_methods();
 

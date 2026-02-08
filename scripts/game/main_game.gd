@@ -55,6 +55,8 @@ var _prev_research_levels: Dictionary = {}  # Phase 21: Track previous research 
 var _resource_overlay_visible := false  # Phase 22: Toggle for resource overlay
 var _prev_energy_balance: Dictionary = {}  # Phase 22: Track energy for warnings
 var _surveyed_tile_count: int = 0  # Phase 22: Track surveyed tiles for discovery notifications
+var _turn_report_items: Array = []  # Phase 23: Accumulate events during turn processing
+var _prev_unit_counts: Dictionary = {}  # Phase 23: Track production completion {player_id: count}
 
 
 func _ready() -> void:
@@ -85,6 +87,14 @@ func _ready() -> void:
 	hud.connect("research_allocation_changed", _on_research_allocation_changed)
 	hud.connect("gold_upgrade_requested", _on_gold_upgrade_requested)
 	hud.connect("mining_distribution_changed", _on_mining_distribution_changed)
+	hud.connect("jump_to_position", _on_jump_to_position)
+
+	# Phase 23: Connect engine event signals
+	engine.connect("unit_attacked", _on_unit_attacked)
+	engine.connect("unit_destroyed", _on_unit_destroyed)
+	engine.connect("unit_disabled", _on_unit_disabled)
+	engine.connect("build_error", _on_build_error)
+	engine.connect("sudden_death", _on_sudden_death)
 	move_animator.connect("animation_finished", _on_move_animation_finished)
 	move_animator.connect("direction_changed", _on_unit_direction_changed)
 	combat_fx.connect("effect_sequence_finished", _on_attack_animation_finished)
@@ -877,6 +887,13 @@ func _on_turn_started(turn: int) -> void:
 	_check_resource_discoveries()
 	if _resource_overlay_visible:
 		_refresh_resource_overlay()
+
+	# Phase 23: Check resource warnings and show turn report
+	_check_resource_warnings()
+	_check_production_complete()
+	var report: Array = _build_turn_report()
+	if not report.is_empty():
+		hud.show_turn_report(report)
 
 
 func _on_turn_ended() -> void:
@@ -1733,6 +1750,187 @@ func _refresh_resource_overlay() -> void:
 						"value": res.get("value", 0)
 					})
 	overlay.set_resource_overlay(resource_tiles)
+
+
+# =============================================================================
+# PHASE 23: NOTIFICATIONS & EVENT LOG
+# =============================================================================
+
+func _on_unit_attacked(player_id: int, unit_id: int, unit_name: String, position: Vector2i) -> void:
+	## C++ signal: a unit belonging to player_id was attacked.
+	if player_id == current_player:
+		hud.show_alert(
+			"%s under attack at (%d, %d)!" % [unit_name, position.x, position.y],
+			Color(1.0, 0.35, 0.2),
+			position)
+	else:
+		hud.add_event(
+			"Enemy %s attacked at (%d, %d)" % [unit_name, position.x, position.y],
+			Color(0.6, 0.65, 0.7),
+			position)
+
+
+func _on_unit_destroyed(player_id: int, unit_id: int, unit_name: String, position: Vector2i) -> void:
+	## C++ signal: a unit belonging to player_id was destroyed.
+	if player_id == current_player:
+		hud.show_alert(
+			"%s DESTROYED at (%d, %d)!" % [unit_name, position.x, position.y],
+			Color(1.0, 0.2, 0.15),
+			position)
+	else:
+		hud.add_event(
+			"Enemy %s destroyed at (%d, %d)" % [unit_name, position.x, position.y],
+			Color(0.5, 0.8, 0.5),
+			position)
+
+
+func _on_unit_disabled(unit_id: int, unit_name: String, position: Vector2i) -> void:
+	## C++ signal: a unit was disabled (by infiltrator).
+	hud.show_alert(
+		"%s DISABLED at (%d, %d)!" % [unit_name, position.x, position.y],
+		Color(0.9, 0.6, 0.2),
+		position)
+
+
+func _on_build_error(player_id: int, error_type: String) -> void:
+	## C++ signal: a build error occurred.
+	if player_id != current_player:
+		return
+	var msg: String
+	var color := Color(1.0, 0.6, 0.3)
+	match error_type:
+		"position_blocked":
+			msg = "Production blocked — position occupied!"
+		"insufficient_material":
+			msg = "Production halted — insufficient materials!"
+		_:
+			msg = "Build error: %s" % error_type
+	hud.show_alert(msg, color)
+
+
+func _on_sudden_death() -> void:
+	## C++ signal: sudden death mode activated.
+	hud.show_alert("SUDDEN DEATH MODE — No more building!", Color(1.0, 0.15, 0.1))
+
+
+func _on_jump_to_position(pos: Vector2i) -> void:
+	## Camera jump from event log or alert.
+	if camera:
+		var world_pos := Vector2(pos.x * 64 + 32, pos.y * 64 + 32)
+		camera.position = world_pos
+
+
+func _check_production_complete() -> void:
+	## Check if any factories finished producing this turn.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var buildings: Array = engine.get_player_buildings(current_player)
+	for bldg_ref in buildings:
+		var bldg = bldg_ref
+		if not bldg or not bldg.is_building():
+			continue
+		var build_list: Array = bldg.get_build_list()
+		# If a factory was working but build list is now empty, production finished
+		# We track this via build_list changes — a simpler heuristic:
+		# check if any factory has repeat_build OFF and an empty build list while it was working
+		if bldg.is_working() and build_list.size() == 0:
+			# Production just completed
+			var name: String = bldg.get_name()
+			var pos: Vector2i = bldg.get_position()
+			hud.show_alert(
+				"%s — production complete!" % name,
+				Color(0.3, 0.85, 0.5),
+				pos)
+
+
+func _check_resource_warnings() -> void:
+	## Check for low/insufficient resource warnings.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var storage: Dictionary = player.get_resource_storage()
+	var needed: Dictionary = player.get_resource_needed()
+	var production: Dictionary = player.get_resource_production()
+
+	# Check each resource type
+	var res_names := ["metal", "oil", "gold"]
+	var res_labels := ["Metal", "Oil", "Gold"]
+	var res_colors := [Color(0.55, 0.65, 0.85), Color(0.5, 0.5, 0.5), Color(0.95, 0.85, 0.3)]
+
+	for i in range(3):
+		var key: String = res_names[i]
+		var stored: int = storage.get(key, 0)
+		var need: int = needed.get(key, 0)
+		var prod: int = production.get(key, 0)
+
+		if need > 0 and stored <= 0 and prod < need:
+			hud.add_event(
+				"%s INSUFFICIENT — production halted!" % res_labels[i],
+				Color(1.0, 0.3, 0.2))
+		elif need > 0 and stored > 0 and stored < need * 2 and prod < need:
+			hud.add_event(
+				"%s running low (%d remaining)" % [res_labels[i], stored],
+				Color(1.0, 0.7, 0.3))
+
+
+func _build_turn_report() -> Array:
+	## Build the turn report summary for the current turn.
+	var report: Array = []
+	var player = engine.get_player(current_player)
+	if not player:
+		return report
+
+	# Research completions
+	var levels: Dictionary = {}
+	var level_arr: Array = player.get_research_levels()
+	var area_names := ["Attack", "Shots", "Range", "Armor", "Hitpoints", "Speed", "Scan", "Cost"]
+	for i in range(mini(level_arr.size(), 8)):
+		levels[area_names[i]] = level_arr[i]
+
+	for area_name in levels:
+		var cur_level: int = levels[area_name]
+		var prev_level: int = _prev_research_levels.get(area_name, 0)
+		if cur_level > prev_level and _prev_research_levels.size() > 0:
+			report.append({
+				"text": "%s research reached level %d!" % [area_name, cur_level],
+				"color": Color(0.3, 1.0, 0.5)
+			})
+
+	# Energy status
+	var energy: Dictionary = player.get_energy_balance()
+	var e_prod: int = energy.get("production", 0)
+	var e_need: int = energy.get("need", 0)
+	if e_need > e_prod:
+		report.append({
+			"text": "Energy shortage: %d / %d needed" % [e_prod, e_need],
+			"color": Color(1.0, 0.4, 0.2)
+		})
+
+	# Resource status
+	var storage: Dictionary = player.get_resource_storage()
+	var needed: Dictionary = player.get_resource_needed()
+	var res_types := [["metal", "Metal"], ["oil", "Oil"], ["gold", "Gold"]]
+	for rt in res_types:
+		var stored: int = storage.get(rt[0], 0)
+		var need: int = needed.get(rt[0], 0)
+		if need > 0 and stored <= 0:
+			report.append({
+				"text": "%s depleted — production affected!" % rt[1],
+				"color": Color(1.0, 0.3, 0.2)
+			})
+
+	# Human balance
+	var humans: Dictionary = player.get_human_balance()
+	var h_prod: int = humans.get("production", 0)
+	var h_need: int = humans.get("need", 0)
+	if h_need > h_prod:
+		report.append({
+			"text": "Worker shortage: %d / %d needed" % [h_prod, h_need],
+			"color": Color(1.0, 0.6, 0.3)
+		})
+
+	return report
 
 
 func _check_resource_discoveries() -> void:

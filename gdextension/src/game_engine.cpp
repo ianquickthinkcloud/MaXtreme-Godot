@@ -119,6 +119,26 @@ void GameEngine::_bind_methods() {
     // Network signals
     ADD_SIGNAL(MethodInfo("freeze_mode_changed", PropertyInfo(Variant::STRING, "mode")));
     ADD_SIGNAL(MethodInfo("connection_lost"));
+
+    // Phase 23: Unit event signals
+    ADD_SIGNAL(MethodInfo("unit_attacked",
+        PropertyInfo(Variant::INT, "player_id"),
+        PropertyInfo(Variant::INT, "unit_id"),
+        PropertyInfo(Variant::STRING, "unit_name"),
+        PropertyInfo(Variant::VECTOR2I, "position")));
+    ADD_SIGNAL(MethodInfo("unit_destroyed",
+        PropertyInfo(Variant::INT, "player_id"),
+        PropertyInfo(Variant::INT, "unit_id"),
+        PropertyInfo(Variant::STRING, "unit_name"),
+        PropertyInfo(Variant::VECTOR2I, "position")));
+    ADD_SIGNAL(MethodInfo("unit_disabled",
+        PropertyInfo(Variant::INT, "unit_id"),
+        PropertyInfo(Variant::STRING, "unit_name"),
+        PropertyInfo(Variant::VECTOR2I, "position")));
+    ADD_SIGNAL(MethodInfo("build_error",
+        PropertyInfo(Variant::INT, "player_id"),
+        PropertyInfo(Variant::STRING, "error_type")));
+    ADD_SIGNAL(MethodInfo("sudden_death"));
 }
 
 GameEngine::GameEngine() {
@@ -151,6 +171,84 @@ cModel* GameEngine::get_active_model() const {
     return model.get();
 }
 
+// --- Signal wiring helper (Phase 23 refactor) ---
+
+void GameEngine::connect_model_signals(cModel* m) {
+    if (!m) return;
+
+    // Core turn signals
+    m->turnEnded.connect([this]() {
+        call_deferred("emit_signal", "turn_ended");
+    });
+    m->newTurnStarted.connect([this](const sNewTurnReport&) {
+        auto* am = get_active_model();
+        auto tc = am ? am->getTurnCounter() : nullptr;
+        int turn = tc ? tc->getTurn() : 0;
+        call_deferred("emit_signal", "turn_started", turn);
+    });
+    m->playerFinishedTurn.connect([this](const cPlayer& player) {
+        call_deferred("emit_signal", "player_finished_turn", player.getId());
+    });
+    m->playerHasWon.connect([this](const cPlayer& player) {
+        call_deferred("emit_signal", "player_won", player.getId());
+    });
+    m->playerHasLost.connect([this](const cPlayer& player) {
+        call_deferred("emit_signal", "player_lost", player.getId());
+    });
+
+    // Phase 23: Unit event signals from cModel
+    m->unitDisabled.connect([this](const cUnit& /*source*/, const cUnit& target) {
+        auto pos = target.getPosition();
+        auto customName = target.getCustomName();
+        std::string nameStr = customName.has_value() ? customName.value()
+            : target.getStaticUnitData().getDefaultName();
+        call_deferred("emit_signal", "unit_disabled",
+            static_cast<int>(target.getId()),
+            String(nameStr.c_str()),
+            Vector2i(pos.x(), pos.y()));
+    });
+    m->suddenDeathMode.connect([this]() {
+        call_deferred("emit_signal", "sudden_death");
+    });
+
+    // Phase 23: Per-player signals
+    for (const auto& playerPtr : m->getPlayerList()) {
+        if (!playerPtr) continue;
+        auto* player = playerPtr.get();
+        int pid = player->getId();
+
+        player->unitAttacked.connect([this, pid](const cUnit& unit) {
+            auto pos = unit.getPosition();
+            auto customName = unit.getCustomName();
+            std::string nameStr = customName.has_value() ? customName.value()
+                : unit.getStaticUnitData().getDefaultName();
+            call_deferred("emit_signal", "unit_attacked",
+                pid, static_cast<int>(unit.getId()),
+                String(nameStr.c_str()),
+                Vector2i(pos.x(), pos.y()));
+        });
+
+        player->unitDestroyed.connect([this, pid](const cUnit& unit) {
+            auto pos = unit.getPosition();
+            auto customName = unit.getCustomName();
+            std::string nameStr = customName.has_value() ? customName.value()
+                : unit.getStaticUnitData().getDefaultName();
+            call_deferred("emit_signal", "unit_destroyed",
+                pid, static_cast<int>(unit.getId()),
+                String(nameStr.c_str()),
+                Vector2i(pos.x(), pos.y()));
+        });
+
+        player->buildErrorBuildPositionBlocked.connect([this, pid]() {
+            call_deferred("emit_signal", "build_error", pid, String("position_blocked"));
+        });
+
+        player->buildErrorInsufficientMaterial.connect([this, pid]() {
+            call_deferred("emit_signal", "build_error", pid, String("insufficient_material"));
+        });
+    }
+}
+
 // --- Networking (Phase 16) ---
 
 bool GameEngine::setup_as_host(int port) {
@@ -177,27 +275,7 @@ void GameEngine::accept_lobby_handoff(std::shared_ptr<cConnectionManager> conn_m
     engine_initialized = true;
 
     // Connect model signals from the active model
-    cModel* m = get_active_model();
-    if (m) {
-        m->turnEnded.connect([this]() {
-            call_deferred("emit_signal", "turn_ended");
-        });
-        m->newTurnStarted.connect([this](const sNewTurnReport&) {
-            auto* am = get_active_model();
-            auto tc = am ? am->getTurnCounter() : nullptr;
-            int turn = tc ? tc->getTurn() : 0;
-            call_deferred("emit_signal", "turn_started", turn);
-        });
-        m->playerFinishedTurn.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_finished_turn", player.getId());
-        });
-        m->playerHasWon.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_won", player.getId());
-        });
-        m->playerHasLost.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_lost", player.getId());
-        });
-    }
+    connect_model_signals(get_active_model());
 
     if (client) {
         client->freezeModeChanged.connect([this]() {
@@ -470,23 +548,7 @@ Dictionary GameEngine::new_game_test() {
 
     // Connect model signals to Godot signals
     if (result.has("success") && bool(result["success"]) && model) {
-        model->turnEnded.connect([this]() {
-            call_deferred("emit_signal", "turn_ended");
-        });
-        model->newTurnStarted.connect([this](const sNewTurnReport&) {
-            auto tc = model->getTurnCounter();
-            int turn = tc ? tc->getTurn() : 0;
-            call_deferred("emit_signal", "turn_started", turn);
-        });
-        model->playerFinishedTurn.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_finished_turn", player.getId());
-        });
-        model->playerHasWon.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_won", player.getId());
-        });
-        model->playerHasLost.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_lost", player.getId());
-        });
+        connect_model_signals(model.get());
     }
 
     return result;
@@ -502,23 +564,7 @@ Dictionary GameEngine::new_game(String map_name, Array player_names, Array playe
 
     // Connect model signals to Godot signals
     if (result.has("success") && bool(result["success"]) && model) {
-        model->turnEnded.connect([this]() {
-            call_deferred("emit_signal", "turn_ended");
-        });
-        model->newTurnStarted.connect([this](const sNewTurnReport&) {
-            auto tc = model->getTurnCounter();
-            int turn = tc ? tc->getTurn() : 0;
-            call_deferred("emit_signal", "turn_started", turn);
-        });
-        model->playerFinishedTurn.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_finished_turn", player.getId());
-        });
-        model->playerHasWon.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_won", player.getId());
-        });
-        model->playerHasLost.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_lost", player.getId());
-        });
+        connect_model_signals(model.get());
     }
 
     return result;
@@ -534,23 +580,7 @@ Dictionary GameEngine::new_game_ex(Dictionary game_settings) {
 
     // Connect model signals to Godot signals
     if (result.has("success") && bool(result["success"]) && model) {
-        model->turnEnded.connect([this]() {
-            call_deferred("emit_signal", "turn_ended");
-        });
-        model->newTurnStarted.connect([this](const sNewTurnReport&) {
-            auto tc = model->getTurnCounter();
-            int turn = tc ? tc->getTurn() : 0;
-            call_deferred("emit_signal", "turn_started", turn);
-        });
-        model->playerFinishedTurn.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_finished_turn", player.getId());
-        });
-        model->playerHasWon.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_won", player.getId());
-        });
-        model->playerHasLost.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_lost", player.getId());
-        });
+        connect_model_signals(model.get());
     }
 
     return result;
@@ -589,23 +619,7 @@ Dictionary GameEngine::load_game(int slot) {
         savegame.loadModel(*model, slot);
 
         // Reconnect model signals
-        model->turnEnded.connect([this]() {
-            call_deferred("emit_signal", "turn_ended");
-        });
-        model->newTurnStarted.connect([this](const sNewTurnReport&) {
-            auto tc = model->getTurnCounter();
-            int turn = tc ? tc->getTurn() : 0;
-            call_deferred("emit_signal", "turn_started", turn);
-        });
-        model->playerFinishedTurn.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_finished_turn", player.getId());
-        });
-        model->playerHasWon.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_won", player.getId());
-        });
-        model->playerHasLost.connect([this](const cPlayer& player) {
-            call_deferred("emit_signal", "player_lost", player.getId());
-        });
+        connect_model_signals(model.get());
 
         result["success"] = true;
         result["slot"] = slot;

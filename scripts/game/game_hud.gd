@@ -14,6 +14,7 @@ signal command_pressed(command: String)  ## Generic command button signal
 signal research_allocation_changed(areas: Array)  ## Phase 21: Player changed research allocation
 signal gold_upgrade_requested(id_first: int, id_second: int, stat_index: int)  ## Phase 21: Gold upgrade purchase
 signal mining_distribution_changed(unit_id: int, metal: int, oil: int, gold: int)  ## Phase 22: Mining reallocation
+signal jump_to_position(pos: Vector2i)  ## Phase 23: Camera jump from event log
 
 # References set by code
 var _sprite_cache = null
@@ -103,6 +104,19 @@ var _energy_warning_timer: float = 0.0
 var _subbase_panel: Window = null
 var _subbase_list: VBoxContainer = null
 
+# --- Phase 23: Event Log & Notifications ---
+var _event_log_panel: Window = null
+var _event_log_list: VBoxContainer = null
+var _event_log_entries: Array = []  # Array of {text, color, position, timestamp}
+const MAX_EVENT_LOG_ENTRIES := 200
+
+var _alert_label: Label = null
+var _alert_timer: float = 0.0
+var _alert_queue: Array = []  # Queue of {text, color, position}
+
+var _turn_report_panel: Window = null
+var _turn_report_list: VBoxContainer = null
+
 
 func _ready() -> void:
 	end_turn_button.pressed.connect(func(): end_turn_pressed.emit())
@@ -121,6 +135,9 @@ func _ready() -> void:
 	_create_mining_dialog()
 	_create_energy_warning()
 	_create_subbase_panel()
+	_create_event_log()
+	_create_alert_display()
+	_create_turn_report_panel()
 
 
 func set_sprite_cache(cache) -> void:
@@ -157,6 +174,15 @@ func _create_global_buttons() -> void:
 	bases_btn.pressed.connect(func(): command_pressed.emit("open_bases"))
 	bottom_bar.add_child(bases_btn)
 	bottom_bar.move_child(bases_btn, 2)
+
+	var log_btn := Button.new()
+	log_btn.text = "LOG"
+	log_btn.custom_minimum_size = Vector2(60, 36)
+	log_btn.add_theme_font_size_override("font_size", 12)
+	log_btn.tooltip_text = "Open event log"
+	log_btn.pressed.connect(func(): _show_event_log())
+	bottom_bar.add_child(log_btn)
+	bottom_bar.move_child(log_btn, 4)
 
 	var res_overlay_btn := Button.new()
 	res_overlay_btn.text = "RESOURCES"
@@ -828,6 +854,7 @@ func _process_notification(delta: float) -> void:
 func _process(delta: float) -> void:
 	_process_notification(delta)
 	_process_energy_warning(delta)
+	_process_alert(delta)
 
 
 # =============================================================================
@@ -1120,6 +1147,259 @@ func show_subbase_panel(sub_bases: Array) -> void:
 		vbox.add_child(human_lbl)
 
 	_subbase_panel.popup_centered()
+
+
+# =============================================================================
+# PHASE 23: EVENT LOG
+# =============================================================================
+
+func _create_event_log() -> void:
+	_event_log_panel = Window.new()
+	_event_log_panel.title = "Event Log"
+	_event_log_panel.size = Vector2i(520, 400)
+	_event_log_panel.visible = false
+	_event_log_panel.transient = true
+	add_child(_event_log_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	_event_log_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.follow_focus = true
+	main_vbox.add_child(scroll)
+
+	_event_log_list = VBoxContainer.new()
+	_event_log_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_event_log_list.add_theme_constant_override("separation", 2)
+	scroll.add_child(_event_log_list)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	main_vbox.add_child(btn_row)
+
+	var clear_btn := Button.new()
+	clear_btn.text = "Clear"
+	clear_btn.custom_minimum_size = Vector2(80, 30)
+	clear_btn.pressed.connect(func():
+		_event_log_entries.clear()
+		for c in _event_log_list.get_children():
+			c.queue_free()
+	)
+	btn_row.add_child(clear_btn)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(80, 30)
+	close_btn.pressed.connect(func(): _event_log_panel.visible = false)
+	btn_row.add_child(close_btn)
+
+	_event_log_panel.close_requested.connect(func(): _event_log_panel.visible = false)
+
+
+func add_event(text: String, color: Color = Color(0.8, 0.85, 0.9), position: Vector2i = Vector2i(-1, -1)) -> void:
+	## Add an entry to the event log. Optionally includes a position for camera jump.
+	var entry := {"text": text, "color": color, "position": position, "turn": 0}
+	_event_log_entries.append(entry)
+	if _event_log_entries.size() > MAX_EVENT_LOG_ENTRIES:
+		_event_log_entries.pop_front()
+
+	if not _event_log_list:
+		return
+
+	# Build the log row
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", color)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(lbl)
+
+	if position != Vector2i(-1, -1):
+		var jump_btn := Button.new()
+		jump_btn.text = ">"
+		jump_btn.custom_minimum_size = Vector2(28, 22)
+		jump_btn.add_theme_font_size_override("font_size", 11)
+		jump_btn.tooltip_text = "Jump to (%d, %d)" % [position.x, position.y]
+		var pos_copy := position
+		jump_btn.pressed.connect(func(): jump_to_position.emit(pos_copy))
+		row.add_child(jump_btn)
+
+	_event_log_list.add_child(row)
+
+	# Trim visual entries if too many
+	while _event_log_list.get_child_count() > MAX_EVENT_LOG_ENTRIES:
+		_event_log_list.get_child(0).queue_free()
+
+
+func _show_event_log() -> void:
+	if _event_log_panel:
+		_event_log_panel.popup_centered()
+
+
+# =============================================================================
+# PHASE 23: ALERT DISPLAY (unit under attack, destroyed, etc.)
+# =============================================================================
+
+func _create_alert_display() -> void:
+	_alert_label = Label.new()
+	_alert_label.text = ""
+	_alert_label.visible = false
+	_alert_label.add_theme_font_size_override("font_size", 18)
+	_alert_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2))
+	_alert_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_alert_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_alert_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_alert_label.offset_top = 50
+	_alert_label.offset_left = -300
+	_alert_label.offset_right = 300
+	_alert_label.offset_bottom = 80
+	add_child(_alert_label)
+
+
+func show_alert(text: String, color: Color = Color(1.0, 0.3, 0.2), position: Vector2i = Vector2i(-1, -1)) -> void:
+	## Show an alert notification with optional camera jump.
+	## Also adds the event to the log.
+	add_event(text, color, position)
+
+	# Queue alert for display
+	_alert_queue.append({"text": text, "color": color, "position": position})
+	if _alert_timer <= 0:
+		_pop_next_alert()
+
+
+func _pop_next_alert() -> void:
+	if _alert_queue.is_empty():
+		if _alert_label:
+			_alert_label.visible = false
+		return
+	var alert: Dictionary = _alert_queue.pop_front()
+	if _alert_label:
+		_alert_label.text = alert.get("text", "")
+		_alert_label.add_theme_color_override("font_color", alert.get("color", Color(1.0, 0.3, 0.2)))
+		_alert_label.visible = true
+		_alert_label.modulate.a = 1.0
+		_alert_timer = 2.5
+	# Auto-jump to position if available
+	var pos: Vector2i = alert.get("position", Vector2i(-1, -1))
+	if pos != Vector2i(-1, -1):
+		jump_to_position.emit(pos)
+
+
+func _process_alert(delta: float) -> void:
+	if _alert_timer > 0:
+		_alert_timer -= delta
+		if _alert_timer <= 0:
+			# Show next queued alert, or fade out
+			_pop_next_alert()
+		elif _alert_timer < 1.0 and _alert_label:
+			_alert_label.modulate.a = _alert_timer / 1.0
+
+
+# =============================================================================
+# PHASE 23: TURN REPORT PANEL
+# =============================================================================
+
+func _create_turn_report_panel() -> void:
+	_turn_report_panel = Window.new()
+	_turn_report_panel.title = "Turn Report"
+	_turn_report_panel.size = Vector2i(450, 350)
+	_turn_report_panel.visible = false
+	_turn_report_panel.transient = true
+	add_child(_turn_report_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_turn_report_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(scroll)
+
+	_turn_report_list = VBoxContainer.new()
+	_turn_report_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_turn_report_list.add_theme_constant_override("separation", 4)
+	scroll.add_child(_turn_report_list)
+
+	var close_btn := Button.new()
+	close_btn.text = "OK"
+	close_btn.custom_minimum_size = Vector2(100, 32)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): _turn_report_panel.visible = false)
+	main_vbox.add_child(close_btn)
+
+	_turn_report_panel.close_requested.connect(func(): _turn_report_panel.visible = false)
+
+
+func show_turn_report(report_items: Array) -> void:
+	## Show the turn report summary panel.
+	## report_items: Array of {text, color, position}
+	if not _turn_report_panel or not _turn_report_list:
+		return
+
+	for child in _turn_report_list.get_children():
+		child.queue_free()
+
+	if report_items.is_empty():
+		var lbl := Label.new()
+		lbl.text = "Nothing significant to report."
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.7))
+		_turn_report_list.add_child(lbl)
+	else:
+		for item in report_items:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 6)
+
+			var lbl := Label.new()
+			lbl.text = item.get("text", "")
+			lbl.add_theme_font_size_override("font_size", 13)
+			lbl.add_theme_color_override("font_color", item.get("color", Color(0.8, 0.85, 0.9)))
+			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			row.add_child(lbl)
+
+			var pos: Vector2i = item.get("position", Vector2i(-1, -1))
+			if pos != Vector2i(-1, -1):
+				var jump_btn := Button.new()
+				jump_btn.text = ">"
+				jump_btn.custom_minimum_size = Vector2(28, 22)
+				jump_btn.add_theme_font_size_override("font_size", 11)
+				jump_btn.tooltip_text = "Jump to (%d, %d)" % [pos.x, pos.y]
+				var pos_copy := pos
+				jump_btn.pressed.connect(func(): jump_to_position.emit(pos_copy))
+				row.add_child(jump_btn)
+
+			_turn_report_list.add_child(row)
+
+	# Also add all items to the event log
+	for item in report_items:
+		add_event(item.get("text", ""), item.get("color", Color(0.8, 0.85, 0.9)),
+				  item.get("position", Vector2i(-1, -1)))
+
+	_turn_report_panel.popup_centered()
 
 
 # =============================================================================
