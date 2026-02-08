@@ -116,6 +116,13 @@ func start_game(config: Dictionary) -> void:
 	get_tree().change_scene_to_file(SCENE_GAME)
 
 
+func load_saved_game(slot: int) -> void:
+	## Load a saved game from the given slot number.
+	## Sets up the game config with load_mode and transitions to the game scene.
+	game_config = {"load_mode": true, "load_slot": slot}
+	get_tree().change_scene_to_file(SCENE_GAME)
+
+
 func quit_game() -> void:
 	# Clean up lobby if active
 	if lobby:

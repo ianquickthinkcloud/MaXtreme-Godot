@@ -57,6 +57,7 @@ var _prev_energy_balance: Dictionary = {}  # Phase 22: Track energy for warnings
 var _surveyed_tile_count: int = 0  # Phase 22: Track surveyed tiles for discovery notifications
 var _turn_report_items: Array = []  # Phase 23: Accumulate events during turn processing
 var _prev_unit_counts: Dictionary = {}  # Phase 23: Track production completion {player_id: count}
+const AUTOSAVE_SLOT := 10  # Phase 24: Auto-save slot number
 
 
 func _ready() -> void:
@@ -88,6 +89,8 @@ func _ready() -> void:
 	hud.connect("gold_upgrade_requested", _on_gold_upgrade_requested)
 	hud.connect("mining_distribution_changed", _on_mining_distribution_changed)
 	hud.connect("jump_to_position", _on_jump_to_position)
+	hud.connect("save_game_requested", _on_save_game_requested)
+	hud.connect("load_game_requested", _on_load_game_requested)
 
 	# Phase 23: Connect engine event signals
 	engine.connect("unit_attacked", _on_unit_attacked)
@@ -124,6 +127,10 @@ func _ready() -> void:
 	if pause_menu:
 		pause_menu.resumed.connect(_on_pause_resumed)
 		pause_menu.quit_to_menu.connect(_on_quit_to_menu)
+		if pause_menu.has_signal("save_requested"):
+			pause_menu.save_requested.connect(_on_pause_save)
+		if pause_menu.has_signal("load_requested"):
+			pause_menu.load_requested.connect(_on_pause_load)
 
 	# Set up game over screen
 	game_over_screen = get_node_or_null("GameOverScreen")
@@ -140,6 +147,32 @@ func _start_game() -> void:
 	var config: Dictionary = {}
 	if GameManager:
 		config = GameManager.game_config
+
+	# Phase 24: Handle load mode — load a save file instead of starting new game
+	if config.get("load_mode", false):
+		var load_slot: int = config.get("load_slot", 1)
+		print("[Game] Loading save from slot %d..." % load_slot)
+		var result: Dictionary = engine.load_game(load_slot)
+		if not result.get("success", false):
+			push_error("[Game] FAILED to load save: ", result.get("error", "unknown"))
+			return
+		# Clear load mode so reloads don't keep re-loading
+		config.erase("load_mode")
+		config.erase("load_slot")
+
+		# Detect hot seat from loaded game (TODO: detect from save metadata)
+		var game_type_str: String = config.get("game_type", "")
+		if game_type_str == "hotseat":
+			_is_hotseat = true
+			_hotseat_player_count = engine.get_player_count()
+			current_player = 0
+			_create_turn_transition_overlay()
+
+		game_running = true
+		_update_hud()
+		_update_selected_unit_hud()
+		print("[Game] Loaded save — Turn %d, %d players" % [result.get("turn", 0), result.get("player_count", 0)])
+		return
 
 	_is_multiplayer = config.get("multiplayer", false)
 
@@ -894,6 +927,9 @@ func _on_turn_started(turn: int) -> void:
 	var report: Array = _build_turn_report()
 	if not report.is_empty():
 		hud.show_turn_report(report)
+
+	# Phase 24: Auto-save at turn boundaries
+	_do_autosave()
 
 
 func _on_turn_ended() -> void:
@@ -1931,6 +1967,52 @@ func _build_turn_report() -> Array:
 		})
 
 	return report
+
+
+# =============================================================================
+# PHASE 24: SAVE/LOAD
+# =============================================================================
+
+func _on_pause_save() -> void:
+	## Open save dialog from pause menu.
+	var saves: Array = engine.get_save_game_list()
+	var turn: int = engine.get_turn_number()
+	hud.show_save_dialog(saves, turn)
+
+
+func _on_pause_load() -> void:
+	## Open load dialog from pause menu.
+	var saves: Array = engine.get_save_game_list()
+	hud.show_load_dialog(saves)
+
+
+func _on_save_game_requested(slot: int, save_name: String) -> void:
+	## Save the game to the requested slot.
+	if engine.save_game(slot, save_name):
+		hud.add_event("Game saved to slot %d: %s" % [slot, save_name], Color(0.3, 0.85, 0.5))
+		hud.show_alert("Game saved!", Color(0.3, 0.85, 0.5))
+		print("[Game] Saved to slot %d: %s" % [slot, save_name])
+	else:
+		hud.show_alert("Save failed!", Color(1.0, 0.3, 0.2))
+		print("[Game] Save failed for slot %d" % slot)
+
+
+func _on_load_game_requested(slot: int) -> void:
+	## Load a game from the requested slot.
+	## This reloads the entire game state, so we need to restart the scene.
+	GameManager.game_config["load_slot"] = slot
+	GameManager.game_config["load_mode"] = true
+	get_tree().change_scene_to_file("res://scenes/game/main_game.tscn")
+
+
+func _do_autosave() -> void:
+	## Auto-save at turn boundaries.
+	var turn: int = engine.get_turn_number()
+	if turn <= 1:
+		return  # Don't auto-save on the very first turn
+	var save_name := "Turn %d - Autosave" % turn
+	if engine.save_game(AUTOSAVE_SLOT, save_name):
+		print("[Game] Auto-saved to slot %d: %s" % [AUTOSAVE_SLOT, save_name])
 
 
 func _check_resource_discoveries() -> void:

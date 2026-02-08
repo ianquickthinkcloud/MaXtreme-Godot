@@ -17,8 +17,8 @@
 | 21 | Research & Upgrades | DONE | 7/7 |
 | 22 | Mining, Resources & Economy | DONE | 6/6 |
 | 23 | Notifications & Event Log | DONE | 7/7 |
-| **24** | **Save/Load System** | **UP NEXT** | **0/5** |
-| 25 | Map Overlays & Toggles | TODO | 0/10 |
+| 24 | Save/Load System | DONE | 5/5 |
+| **25** | **Map Overlays & Toggles** | **UP NEXT** | **0/10** |
 | 26 | Construction & Building Enhancements | TODO | 0/7 |
 | 27 | End-Game | TODO | 0/8 |
 | 28 | Reports & Statistics | TODO | 0/4 |
@@ -28,7 +28,7 @@
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 6 phases (53 items) | Remaining: 10 phases (70 items) | Total: 16 phases (123 items)**
+**Completed: 7 phases (58 items) | Remaining: 9 phases (65 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -638,15 +638,27 @@ positions along the horizontal center of the map. Players have no choice.
 - Resource warnings: per-resource low/insufficient checks added to event log on turn start
 - Build error alerts: "position blocked" and "insufficient material" shown as orange alerts
 
-## Phase 24: Save/Load System — **MEDIUM PRIORITY**
+## Phase 24: Save/Load System — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 24.1 | Save game dialog (slot list, name input) | **EXPOSED** | Medium |
-| 24.2 | Load game screen (main menu) | **STUB** | Medium |
-| 24.3 | Load game screen (in-game) | **MISSING** | Medium |
-| 24.4 | Auto-save at turn boundaries | **MISSING** | Medium |
-| 24.5 | "Continue" option on main menu | **MISSING** | Small |
+| 24.1 | Save game dialog (slot list, name input) | **DONE** | Medium |
+| 24.2 | Load game screen (main menu) | **DONE** | Medium |
+| 24.3 | Load game screen (in-game) | **DONE** | Medium |
+| 24.4 | Auto-save at turn boundaries | **DONE** | Medium |
+| 24.5 | "Continue" option on main menu | **DONE** | Small |
+
+**Implementation notes:**
+
+**GDScript:**
+- Save dialog: slot list showing save name/turn/map/date, name input, "New Save Slot" option, slot selection highlights
+- Load dialog (main menu): Window popup listing all saves with click-to-load, Cancel button
+- Load dialog (in-game): same dialog opened from pause menu Load button, reloads scene with `load_mode` config
+- Pause menu: added "Save Game" and "Load Game" buttons between Resume and Settings
+- Auto-save: slot 10, triggered on every turn start (after turn 1), name format "Turn X - Autosave"
+- Continue button: added to main menu before "LOAD GAME", loads auto-save slot 10
+- GameManager: new `load_saved_game(slot)` method for clean scene transition to loaded game
+- main_game.gd: `load_mode` handling in `_start_game()` calls `engine.load_game(slot)` instead of new_game
 
 ## Phase 25: Map Overlays & Toggles — **MEDIUM PRIORITY**
 

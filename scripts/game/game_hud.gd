@@ -15,6 +15,8 @@ signal research_allocation_changed(areas: Array)  ## Phase 21: Player changed re
 signal gold_upgrade_requested(id_first: int, id_second: int, stat_index: int)  ## Phase 21: Gold upgrade purchase
 signal mining_distribution_changed(unit_id: int, metal: int, oil: int, gold: int)  ## Phase 22: Mining reallocation
 signal jump_to_position(pos: Vector2i)  ## Phase 23: Camera jump from event log
+signal save_game_requested(slot: int, save_name: String)  ## Phase 24: Save
+signal load_game_requested(slot: int)  ## Phase 24: Load
 
 # References set by code
 var _sprite_cache = null
@@ -117,6 +119,15 @@ var _alert_queue: Array = []  # Queue of {text, color, position}
 var _turn_report_panel: Window = null
 var _turn_report_list: VBoxContainer = null
 
+# --- Phase 24: Save/Load ---
+var _save_load_dialog: Window = null
+var _save_load_title: Label = null
+var _save_load_list: VBoxContainer = null
+var _save_load_name_input: LineEdit = null
+var _save_load_action_button: Button = null
+var _save_load_mode: String = "save"  # "save" or "load"
+var _save_load_selected_slot: int = -1
+
 
 func _ready() -> void:
 	end_turn_button.pressed.connect(func(): end_turn_pressed.emit())
@@ -138,6 +149,7 @@ func _ready() -> void:
 	_create_event_log()
 	_create_alert_display()
 	_create_turn_report_panel()
+	_create_save_load_dialog()
 
 
 func set_sprite_cache(cache) -> void:
@@ -1400,6 +1412,205 @@ func show_turn_report(report_items: Array) -> void:
 				  item.get("position", Vector2i(-1, -1)))
 
 	_turn_report_panel.popup_centered()
+
+
+# =============================================================================
+# PHASE 24: SAVE/LOAD DIALOG
+# =============================================================================
+
+func _create_save_load_dialog() -> void:
+	_save_load_dialog = Window.new()
+	_save_load_dialog.title = "Save Game"
+	_save_load_dialog.size = Vector2i(520, 480)
+	_save_load_dialog.visible = false
+	_save_load_dialog.transient = true
+	add_child(_save_load_dialog)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	_save_load_dialog.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(main_vbox)
+
+	_save_load_title = Label.new()
+	_save_load_title.text = "Save Game"
+	_save_load_title.add_theme_font_size_override("font_size", 18)
+	_save_load_title.add_theme_color_override("font_color", Color(0.3, 0.85, 1.0))
+	_save_load_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	main_vbox.add_child(_save_load_title)
+
+	var sep := HSeparator.new()
+	main_vbox.add_child(sep)
+
+	# Slot list
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(scroll)
+
+	_save_load_list = VBoxContainer.new()
+	_save_load_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_save_load_list.add_theme_constant_override("separation", 4)
+	scroll.add_child(_save_load_list)
+
+	# Save name input (only visible in save mode)
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	main_vbox.add_child(name_row)
+
+	var name_label := Label.new()
+	name_label.text = "Save name:"
+	name_label.add_theme_font_size_override("font_size", 13)
+	name_row.add_child(name_label)
+
+	_save_load_name_input = LineEdit.new()
+	_save_load_name_input.placeholder_text = "Enter save name..."
+	_save_load_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_save_load_name_input.custom_minimum_size = Vector2(200, 32)
+	name_row.add_child(_save_load_name_input)
+
+	# Buttons
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	main_vbox.add_child(btn_row)
+
+	_save_load_action_button = Button.new()
+	_save_load_action_button.text = "Save"
+	_save_load_action_button.custom_minimum_size = Vector2(100, 36)
+	_save_load_action_button.add_theme_font_size_override("font_size", 14)
+	_save_load_action_button.pressed.connect(_on_save_load_action)
+	btn_row.add_child(_save_load_action_button)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.custom_minimum_size = Vector2(100, 36)
+	cancel_btn.add_theme_font_size_override("font_size", 14)
+	cancel_btn.pressed.connect(func(): _save_load_dialog.visible = false)
+	btn_row.add_child(cancel_btn)
+
+	_save_load_dialog.close_requested.connect(func(): _save_load_dialog.visible = false)
+
+
+func show_save_dialog(saves: Array, current_turn: int) -> void:
+	## Open the save dialog with the list of existing saves.
+	_save_load_mode = "save"
+	_save_load_selected_slot = -1
+	if _save_load_dialog:
+		_save_load_dialog.title = "Save Game"
+	if _save_load_title:
+		_save_load_title.text = "Save Game"
+	if _save_load_action_button:
+		_save_load_action_button.text = "Save"
+		_save_load_action_button.disabled = false
+	if _save_load_name_input:
+		_save_load_name_input.visible = true
+		_save_load_name_input.text = "Turn %d" % current_turn
+	_populate_save_load_list(saves)
+	_save_load_dialog.popup_centered()
+
+
+func show_load_dialog(saves: Array) -> void:
+	## Open the load dialog with the list of existing saves.
+	_save_load_mode = "load"
+	_save_load_selected_slot = -1
+	if _save_load_dialog:
+		_save_load_dialog.title = "Load Game"
+	if _save_load_title:
+		_save_load_title.text = "Load Game"
+	if _save_load_action_button:
+		_save_load_action_button.text = "Load"
+		_save_load_action_button.disabled = true  # No slot selected yet
+	if _save_load_name_input:
+		_save_load_name_input.visible = false
+	_populate_save_load_list(saves)
+	_save_load_dialog.popup_centered()
+
+
+func _populate_save_load_list(saves: Array) -> void:
+	## Build the save slot list.
+	if not _save_load_list:
+		return
+
+	for child in _save_load_list.get_children():
+		child.queue_free()
+
+	# Add "New Save" option at the top (save mode only)
+	if _save_load_mode == "save":
+		var new_btn := Button.new()
+		new_btn.text = "[ New Save Slot ]"
+		new_btn.custom_minimum_size = Vector2(0, 36)
+		new_btn.add_theme_font_size_override("font_size", 13)
+		new_btn.add_theme_color_override("font_color", Color(0.3, 0.85, 0.5))
+		# Find first unused slot
+		var used_slots: Dictionary = {}
+		for s in saves:
+			used_slots[s.get("slot", 0)] = true
+		var next_slot := 1
+		while used_slots.has(next_slot) and next_slot <= 100:
+			next_slot += 1
+		new_btn.pressed.connect(func(): _select_slot(next_slot, "New Save"))
+		_save_load_list.add_child(new_btn)
+
+	# Existing saves (sorted by slot)
+	var sorted_saves := saves.duplicate()
+	sorted_saves.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a.get("slot", 0) < b.get("slot", 0))
+
+	for save in sorted_saves:
+		var slot: int = save.get("slot", 0)
+		var name_str: String = save.get("name", "Unnamed")
+		var date_str: String = save.get("date", "")
+		var turn: int = save.get("turn", 0)
+		var map_str: String = save.get("map", "")
+		var players: Array = save.get("players", [])
+
+		var btn := Button.new()
+		var player_names: String = ""
+		for p in players:
+			if player_names.length() > 0:
+				player_names += ", "
+			player_names += p.get("name", "?")
+
+		btn.text = "Slot %d: %s  |  Turn %d  |  %s  |  %s" % [slot, name_str, turn, map_str, date_str]
+		btn.custom_minimum_size = Vector2(0, 36)
+		btn.add_theme_font_size_override("font_size", 12)
+		btn.tooltip_text = "Players: %s" % player_names
+
+		var slot_copy := slot
+		var name_copy := name_str
+		btn.pressed.connect(func(): _select_slot(slot_copy, name_copy))
+		_save_load_list.add_child(btn)
+
+
+func _select_slot(slot: int, save_name: String) -> void:
+	_save_load_selected_slot = slot
+	if _save_load_name_input and _save_load_mode == "save":
+		if _save_load_name_input.text.is_empty() or _save_load_name_input.text.begins_with("Turn "):
+			_save_load_name_input.text = save_name
+	if _save_load_action_button:
+		_save_load_action_button.disabled = false
+		_save_load_action_button.text = "%s (Slot %d)" % [
+			"Save" if _save_load_mode == "save" else "Load",
+			slot]
+
+
+func _on_save_load_action() -> void:
+	if _save_load_selected_slot < 0:
+		return
+	if _save_load_mode == "save":
+		var name_str: String = _save_load_name_input.text if _save_load_name_input else "Quick Save"
+		if name_str.is_empty():
+			name_str = "Quick Save"
+		save_game_requested.emit(_save_load_selected_slot, name_str)
+	else:
+		load_game_requested.emit(_save_load_selected_slot)
+	_save_load_dialog.visible = false
 
 
 # =============================================================================
