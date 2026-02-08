@@ -91,6 +91,9 @@ func _ready() -> void:
 	hud.connect("jump_to_position", _on_jump_to_position)
 	hud.connect("save_game_requested", _on_save_game_requested)
 	hud.connect("load_game_requested", _on_load_game_requested)
+	hud.connect("stat_overlay_changed", _on_stat_overlay_changed)
+	hud.connect("grid_overlay_toggled", _on_grid_overlay_toggled)
+	hud.connect("fog_overlay_toggled", _on_fog_overlay_toggled)
 
 	# Phase 23: Connect engine event signals
 	engine.connect("unit_attacked", _on_unit_attacked)
@@ -1044,6 +1047,23 @@ func _create_minimap() -> void:
 		minimap_container.add_child(minimap)
 		minimap.setup(engine, map_renderer, fog, camera, current_player)
 		minimap.minimap_clicked.connect(_on_minimap_clicked)
+		# Phase 25: Add minimap zoom and filter buttons
+		var mm_btn_row := HBoxContainer.new()
+		mm_btn_row.add_theme_constant_override("separation", 2)
+		minimap_container.add_child(mm_btn_row)
+		var zoom_btn := Button.new()
+		zoom_btn.text = "Zoom"
+		zoom_btn.custom_minimum_size = Vector2(50, 20)
+		zoom_btn.add_theme_font_size_override("font_size", 9)
+		zoom_btn.pressed.connect(func(): minimap.toggle_zoom())
+		mm_btn_row.add_child(zoom_btn)
+		var filter_btn := Button.new()
+		filter_btn.text = "Armed"
+		filter_btn.custom_minimum_size = Vector2(50, 20)
+		filter_btn.add_theme_font_size_override("font_size", 9)
+		filter_btn.toggle_mode = true
+		filter_btn.pressed.connect(func(): minimap.toggle_attack_filter())
+		mm_btn_row.add_child(filter_btn)
 	else:
 		push_warning("[Game] MinimapContainer not found in HUD")
 
@@ -2013,6 +2033,165 @@ func _do_autosave() -> void:
 	var save_name := "Turn %d - Autosave" % turn
 	if engine.save_game(AUTOSAVE_SLOT, save_name):
 		print("[Game] Auto-saved to slot %d: %s" % [AUTOSAVE_SLOT, save_name])
+
+
+# =============================================================================
+# PHASE 25: MAP OVERLAYS & TOGGLES
+# =============================================================================
+
+var _current_stat_overlay: String = ""
+
+func _on_stat_overlay_changed(overlay_name: String) -> void:
+	_current_stat_overlay = overlay_name
+	if overlay_name.is_empty():
+		overlay.clear_stat_overlay()
+		# Also clear resource overlay if survey was active
+		if not _resource_overlay_visible:
+			overlay.clear_resource_overlay()
+	elif overlay_name == "survey":
+		# Survey overlay reuses the resource overlay from Phase 22
+		overlay.clear_stat_overlay()
+		_refresh_resource_overlay()
+	else:
+		_refresh_stat_overlay()
+
+
+func _on_grid_overlay_toggled(enabled: bool) -> void:
+	overlay.set_grid_visible(enabled)
+
+
+func _on_fog_overlay_toggled(enabled: bool) -> void:
+	if fog:
+		fog.fog_enabled = not enabled  # Toggle: button ON = fog OFF
+		fog.queue_redraw()
+
+
+func _refresh_stat_overlay() -> void:
+	## Rebuild the stat overlay tiles based on the current overlay type.
+	if _current_stat_overlay.is_empty():
+		return
+
+	var tiles: Array = []
+	var player_count: int = engine.get_player_count()
+
+	for pi in range(player_count):
+		var is_own: bool = (pi == current_player)
+		# For enemy units, only show if visible (fog check)
+		var vehicles: Array = engine.get_player_vehicles(pi)
+		var buildings: Array = engine.get_player_buildings(pi)
+		var all_units: Array = vehicles + buildings
+
+		for unit in all_units:
+			if not unit:
+				continue
+			var pos: Vector2i = unit.get_position()
+			# Skip enemy units hidden by fog
+			if not is_own and fog and fog.fog_enabled:
+				if not fog.is_tile_visible(pos):
+					continue
+
+			var tile_data: Dictionary = _get_stat_overlay_for_unit(unit, pi, is_own)
+			if not tile_data.is_empty():
+				tiles.append(tile_data)
+
+	overlay.set_stat_overlay(tiles)
+
+
+func _get_stat_overlay_for_unit(unit, player_idx: int, is_own: bool) -> Dictionary:
+	## Returns overlay tile data for a unit based on the current overlay type.
+	var pos: Vector2i = unit.get_position()
+	var text := ""
+	var color := Color(1, 1, 1, 0.8)
+	var bg_color := Color(0, 0, 0, 0)
+
+	match _current_stat_overlay:
+		"survey":
+			# Show surveyed status — only for tiles, handled differently
+			# For survey overlay, we show resource values on surveyed tiles
+			# This is already handled by the resource overlay; skip units
+			return {}
+
+		"hits":
+			var hp: int = unit.get_hitpoints()
+			var hp_max: int = unit.get_hitpoints_max()
+			if hp_max <= 0:
+				return {}
+			var ratio := float(hp) / float(hp_max)
+			text = "%d/%d" % [hp, hp_max]
+			if ratio > 0.6:
+				color = Color(0.3, 0.9, 0.4, 0.85)
+			elif ratio > 0.3:
+				color = Color(1.0, 0.85, 0.2, 0.85)
+			else:
+				color = Color(1.0, 0.3, 0.2, 0.9)
+				bg_color = Color(0.4, 0.05, 0.05, 0.2)
+
+		"scan":
+			var scan: int = unit.get_scan()
+			if scan <= 0:
+				return {}
+			text = str(scan)
+			color = Color(0.3, 0.85, 1.0, 0.85)
+
+		"status":
+			# Show unit state flags
+			var parts: Array = []
+			if unit.is_disabled():
+				parts.append("DIS")
+			if unit.is_sentry_active():
+				parts.append("SEN")
+			if unit.is_manual_fire():
+				parts.append("MAN")
+			if unit.is_working():
+				parts.append("WRK")
+			if parts.is_empty():
+				text = "OK"
+				color = Color(0.5, 0.6, 0.5, 0.5)
+			else:
+				text = " ".join(parts)
+				color = Color(1.0, 0.7, 0.3, 0.85)
+
+		"ammo":
+			var ammo: int = unit.get_ammo()
+			var ammo_max: int = unit.get_ammo_max()
+			if ammo_max <= 0:
+				return {}
+			text = "%d/%d" % [ammo, ammo_max]
+			var ratio := float(ammo) / float(ammo_max)
+			if ratio > 0.5:
+				color = Color(0.7, 0.85, 1.0, 0.8)
+			elif ratio > 0.2:
+				color = Color(1.0, 0.7, 0.3, 0.85)
+			else:
+				color = Color(1.0, 0.3, 0.2, 0.9)
+
+		"colour":
+			# Highlight tiles by owner colour
+			var PLAYER_COLORS := [
+				Color(0.2, 0.4, 1.0, 0.25),
+				Color(1.0, 0.2, 0.2, 0.25),
+				Color(0.2, 0.8, 0.2, 0.25),
+				Color(1.0, 0.8, 0.0, 0.25),
+				Color(0.7, 0.2, 0.8, 0.25),
+				Color(1.0, 0.5, 0.1, 0.25),
+				Color(0.1, 0.8, 0.8, 0.25),
+				Color(0.5, 0.5, 0.5, 0.25),
+			]
+			bg_color = PLAYER_COLORS[player_idx % PLAYER_COLORS.size()]
+			text = ""
+			return {"pos": pos, "text": "", "color": color, "bg_color": bg_color}
+
+		"lock":
+			# Show only sentry/locked units
+			if not unit.is_sentry_active():
+				return {}
+			text = "LOCK"
+			color = Color(1.0, 0.85, 0.2, 0.9)
+			bg_color = Color(0.3, 0.25, 0.05, 0.2)
+
+	if text.is_empty() and bg_color.a <= 0:
+		return {}
+	return {"pos": pos, "text": text, "color": color, "bg_color": bg_color}
 
 
 func _check_resource_discoveries() -> void:

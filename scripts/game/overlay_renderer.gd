@@ -68,6 +68,12 @@ var _build_preview_valid := false
 # --- Resource overlay (Phase 22) ---
 var _resource_tiles: Array = []
 
+# --- Stat overlay (Phase 25) ---
+# Each entry: {pos: Vector2i, text: String, color: Color, bg_color: Color}
+var _stat_overlay_tiles: Array = []
+var _grid_visible := false
+const COLOR_GRID := Color(0.3, 0.35, 0.4, 0.15)
+
 var _time := 0.0
 
 
@@ -137,6 +143,26 @@ func clear_build_preview() -> void:
 	queue_redraw()
 
 
+func set_stat_overlay(tiles: Array) -> void:
+	## Set stat overlay data. tiles: Array of {pos: Vector2i, text: String, color: Color, bg_color: Color}
+	_stat_overlay_tiles = tiles
+	queue_redraw()
+
+
+func clear_stat_overlay() -> void:
+	_stat_overlay_tiles.clear()
+	queue_redraw()
+
+
+func set_grid_visible(visible: bool) -> void:
+	_grid_visible = visible
+	queue_redraw()
+
+
+func is_grid_visible() -> bool:
+	return _grid_visible
+
+
 func set_resource_overlay(tiles: Array) -> void:
 	## Set resource overlay data. tiles: Array of {pos: Vector2i, type: String, value: int}
 	_resource_tiles = tiles
@@ -187,8 +213,12 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if _grid_visible:
+		_draw_grid()
 	if not _resource_tiles.is_empty():
 		_draw_resource_overlay()
+	if not _stat_overlay_tiles.is_empty():
+		_draw_stat_overlay()
 	if not _reachable_set.is_empty():
 		_draw_movement_range()
 	if not _attack_range_tiles.is_empty():
@@ -400,6 +430,49 @@ func _draw_build_preview() -> void:
 	var label_pos := Vector2(px + (TILE_SIZE * size) / 2.0, py - 8)
 	draw_string(font, label_pos + Vector2(1, 1), label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 12, Color(0, 0, 0, 0.5))
 	draw_string(font, label_pos, label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 12, label_color)
+
+
+func _draw_grid() -> void:
+	## Draw a grid overlay across the visible map area (Phase 25).
+	# We'll draw a reasonable range; the camera culls the rest anyway.
+	var vp := get_viewport()
+	if not vp:
+		return
+	var canvas_xform := get_canvas_transform()
+	var inv := canvas_xform.affine_inverse()
+	var vp_size := vp.get_visible_rect().size
+	var tl := inv * Vector2.ZERO
+	var br := inv * vp_size
+	var start_x := int(tl.x / TILE_SIZE) - 1
+	var start_y := int(tl.y / TILE_SIZE) - 1
+	var end_x := int(br.x / TILE_SIZE) + 2
+	var end_y := int(br.y / TILE_SIZE) + 2
+
+	for x in range(start_x, end_x):
+		var px := float(x * TILE_SIZE)
+		draw_line(Vector2(px, start_y * TILE_SIZE), Vector2(px, end_y * TILE_SIZE), COLOR_GRID, 1.0)
+	for y in range(start_y, end_y):
+		var py := float(y * TILE_SIZE)
+		draw_line(Vector2(start_x * TILE_SIZE, py), Vector2(end_x * TILE_SIZE, py), COLOR_GRID, 1.0)
+
+
+func _draw_stat_overlay() -> void:
+	## Draw per-unit stat text overlay on tiles (Phase 25).
+	var font := ThemeDB.fallback_font
+	for tile_info in _stat_overlay_tiles:
+		var pos: Vector2i = tile_info.get("pos", Vector2i(0, 0))
+		var text: String = tile_info.get("text", "")
+		var color: Color = tile_info.get("color", Color(1, 1, 1, 0.8))
+		var bg_color: Color = tile_info.get("bg_color", Color(0, 0, 0, 0))
+
+		var rect := Rect2(pos.x * TILE_SIZE, pos.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+		if bg_color.a > 0:
+			draw_rect(rect, bg_color)
+
+		var center := Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0,
+							  pos.y * TILE_SIZE + TILE_SIZE / 2.0 + 4)
+		draw_string(font, center + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_CENTER, -1, 11, Color(0, 0, 0, 0.5))
+		draw_string(font, center, text, HORIZONTAL_ALIGNMENT_CENTER, -1, 11, color)
 
 
 func _draw_resource_overlay() -> void:

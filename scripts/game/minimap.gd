@@ -41,6 +41,8 @@ var _scale_x := 1.0
 var _scale_y := 1.0
 var _dragging := false
 var _current_player := 0
+var _zoom_level := 1  # Phase 25: 1 = normal, 2 = zoomed
+var _attack_units_only := false  # Phase 25: Filter to show only armed units
 
 
 func setup(engine, map_renderer, fog_renderer, camera: Camera2D, current_player: int) -> void:
@@ -70,10 +72,14 @@ func _generate_terrain_texture() -> void:
 	if _map_w == 0 or _map_h == 0 or not _map_renderer:
 		return
 
-	var img := Image.create(MINIMAP_SIZE, MINIMAP_SIZE, false, Image.FORMAT_RGB8)
+	var render_size := MINIMAP_SIZE * _zoom_level
+	_scale_x = float(render_size) / maxf(_map_w, 1.0)
+	_scale_y = float(render_size) / maxf(_map_h, 1.0)
 
-	for py in range(MINIMAP_SIZE):
-		for px in range(MINIMAP_SIZE):
+	var img := Image.create(render_size, render_size, false, Image.FORMAT_RGB8)
+
+	for py in range(render_size):
+		for px in range(render_size):
 			var tx := int(float(px) / _scale_x)
 			var ty := int(float(py) / _scale_y)
 			tx = clampi(tx, 0, _map_w - 1)
@@ -88,6 +94,25 @@ func refresh() -> void:
 	queue_redraw()
 
 
+func toggle_zoom() -> void:
+	## Phase 25: Toggle between normal (1x) and zoomed (2x) minimap.
+	_zoom_level = 1 if _zoom_level == 2 else 2
+	var new_size := MINIMAP_SIZE * _zoom_level
+	custom_minimum_size = Vector2(new_size + BORDER_WIDTH * 2, new_size + BORDER_WIDTH * 2)
+	_generate_terrain_texture()
+	queue_redraw()
+
+
+func toggle_attack_filter() -> void:
+	## Phase 25: Toggle showing only attack-capable units on the minimap.
+	_attack_units_only = not _attack_units_only
+	queue_redraw()
+
+
+func is_attack_filter_active() -> bool:
+	return _attack_units_only
+
+
 func _process(_delta: float) -> void:
 	# Redraw periodically (every 6 frames) for smooth camera tracking
 	if Engine.get_process_frames() % 6 == 0:
@@ -95,18 +120,19 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
+	var render_size := MINIMAP_SIZE * _zoom_level
 	var offset := Vector2(BORDER_WIDTH, BORDER_WIDTH)
 
 	# Background
-	draw_rect(Rect2(Vector2.ZERO, Vector2(MINIMAP_SIZE + BORDER_WIDTH * 2, MINIMAP_SIZE + BORDER_WIDTH * 2)), BG_COLOR)
+	draw_rect(Rect2(Vector2.ZERO, Vector2(render_size + BORDER_WIDTH * 2, render_size + BORDER_WIDTH * 2)), BG_COLOR)
 
 	# Border
-	draw_rect(Rect2(Vector2.ZERO, Vector2(MINIMAP_SIZE + BORDER_WIDTH * 2, MINIMAP_SIZE + BORDER_WIDTH * 2)),
+	draw_rect(Rect2(Vector2.ZERO, Vector2(render_size + BORDER_WIDTH * 2, render_size + BORDER_WIDTH * 2)),
 		BORDER_COLOR, false, BORDER_WIDTH)
 
 	# Terrain
 	if _terrain_texture:
-		draw_texture_rect(_terrain_texture, Rect2(offset, Vector2(MINIMAP_SIZE, MINIMAP_SIZE)), false)
+		draw_texture_rect(_terrain_texture, Rect2(offset, Vector2(render_size, render_size)), false)
 
 	# Fog of war overlay
 	if _fog_renderer and _fog_renderer.fog_enabled and _map_w > 0:
@@ -123,10 +149,11 @@ func _draw() -> void:
 
 func _draw_fog(offset: Vector2) -> void:
 	## Draw fog overlay on the minimap (unexplored = dark, explored = semi-dark).
-	# Draw at a lower resolution for performance (1 pixel per 2 minimap pixels)
-	var step := 2
-	for py in range(0, MINIMAP_SIZE, step):
-		for px in range(0, MINIMAP_SIZE, step):
+	var render_size := MINIMAP_SIZE * _zoom_level
+	# Draw at a lower resolution for performance
+	var step := 2 * _zoom_level
+	for py in range(0, render_size, step):
+		for px in range(0, render_size, step):
 			var tx := int(float(px) / _scale_x)
 			var ty := int(float(py) / _scale_y)
 			var tile := Vector2i(clampi(tx, 0, _map_w - 1), clampi(ty, 0, _map_h - 1))
@@ -151,27 +178,37 @@ func _draw_units(offset: Vector2) -> void:
 		# Vehicles
 		var vehicles = _engine.get_player_vehicles(pi)
 		for v in vehicles:
+			# Phase 25: Attack filter
+			if _attack_units_only and not v.has_weapon():
+				continue
+
 			var pos: Vector2i = v.get_position()
 			# Skip if hidden by fog (enemy units)
 			if pi != _current_player and _fog_renderer:
 				if _fog_renderer.fog_enabled and not _fog_renderer.is_tile_visible(pos):
 					continue
 
+			var dot := UNIT_DOT_SIZE * _zoom_level
 			var minimap_pos := offset + Vector2(pos.x * _scale_x, pos.y * _scale_y)
-			draw_rect(Rect2(minimap_pos - Vector2(UNIT_DOT_SIZE / 2.0, UNIT_DOT_SIZE / 2.0),
-				Vector2(UNIT_DOT_SIZE, UNIT_DOT_SIZE)), color)
+			draw_rect(Rect2(minimap_pos - Vector2(dot / 2.0, dot / 2.0),
+				Vector2(dot, dot)), color)
 
 		# Buildings
 		var buildings = _engine.get_player_buildings(pi)
 		for b in buildings:
+			# Phase 25: Attack filter — only show buildings with weapons
+			if _attack_units_only and not b.has_weapon():
+				continue
+
 			var pos: Vector2i = b.get_position()
 			if pi != _current_player and _fog_renderer:
 				if _fog_renderer.fog_enabled and not _fog_renderer.is_tile_visible(pos):
 					continue
 
+			var dot := BUILDING_DOT_SIZE * _zoom_level
 			var minimap_pos := offset + Vector2(pos.x * _scale_x, pos.y * _scale_y)
-			draw_rect(Rect2(minimap_pos - Vector2(BUILDING_DOT_SIZE / 2.0, BUILDING_DOT_SIZE / 2.0),
-				Vector2(BUILDING_DOT_SIZE, BUILDING_DOT_SIZE)), color.lightened(0.2))
+			draw_rect(Rect2(minimap_pos - Vector2(dot / 2.0, dot / 2.0),
+				Vector2(dot, dot)), color.lightened(0.2))
 
 
 func _draw_camera_viewport(offset: Vector2) -> void:

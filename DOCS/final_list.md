@@ -18,8 +18,8 @@
 | 22 | Mining, Resources & Economy | DONE | 6/6 |
 | 23 | Notifications & Event Log | DONE | 7/7 |
 | 24 | Save/Load System | DONE | 5/5 |
-| **25** | **Map Overlays & Toggles** | **UP NEXT** | **0/10** |
-| 26 | Construction & Building Enhancements | TODO | 0/7 |
+| 25 | Map Overlays & Toggles | DONE | 10/10 |
+| **26** | **Construction & Building Enhancements** | **UP NEXT** | **0/7** |
 | 27 | End-Game | TODO | 0/8 |
 | 28 | Reports & Statistics | TODO | 0/4 |
 | 29 | Keyboard Shortcuts & UX | TODO | 0/6 |
@@ -28,7 +28,7 @@
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 7 phases (58 items) | Remaining: 9 phases (65 items) | Total: 16 phases (123 items)**
+**Completed: 8 phases (68 items) | Remaining: 8 phases (55 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -660,20 +660,36 @@ positions along the horizontal center of the map. Players have no choice.
 - GameManager: new `load_saved_game(slot)` method for clean scene transition to loaded game
 - main_game.gd: `load_mode` handling in `_start_game()` calls `engine.load_game(slot)` instead of new_game
 
-## Phase 25: Map Overlays & Toggles — **MEDIUM PRIORITY**
+## Phase 25: Map Overlays & Toggles — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 25.1 | Survey overlay toggle | **MISSING** | Small |
-| 25.2 | Hits overlay toggle | **MISSING** | Small |
-| 25.3 | Scan overlay toggle | **MISSING** | Small |
-| 25.4 | Status overlay toggle | **MISSING** | Small |
-| 25.5 | Ammo overlay toggle | **MISSING** | Small |
-| 25.6 | Grid overlay toggle | **MISSING** | Small |
-| 25.7 | Colour overlay toggle | **MISSING** | Small |
-| 25.8 | Fog of war overlay toggle | **PARTIAL** | Small |
-| 25.9 | Lock overlay toggle | **MISSING** | Small |
-| 25.10 | Minimap zoom & attack-units-only filter | **MISSING** | Small |
+| 25.1 | Survey overlay toggle | **DONE** | Small |
+| 25.2 | Hits overlay toggle | **DONE** | Small |
+| 25.3 | Scan overlay toggle | **DONE** | Small |
+| 25.4 | Status overlay toggle | **DONE** | Small |
+| 25.5 | Ammo overlay toggle | **DONE** | Small |
+| 25.6 | Grid overlay toggle | **DONE** | Small |
+| 25.7 | Colour overlay toggle | **DONE** | Small |
+| 25.8 | Fog of war overlay toggle | **DONE** | Small |
+| 25.9 | Lock overlay toggle | **DONE** | Small |
+| 25.10 | Minimap zoom & attack-units-only filter | **DONE** | Small |
+
+**Implementation notes:**
+
+**GDScript:**
+- Overlay toolbar: 9 toggle buttons (SVY, HP, SCN, STS, AMO, CLR, LCK, GRD, FOG) at bottom-left
+- Generic stat overlay system in `overlay_renderer.gd`: draws per-unit text/color on tiles
+- Survey (SVY): reuses Phase 22 resource overlay showing surveyed deposits
+- Hits (HP): shows HP/max with green/yellow/red colour coding per health ratio
+- Scan (SCN): shows scan range value in cyan
+- Status (STS): shows state flags (DIS/SEN/MAN/WRK or OK)
+- Ammo (AMO): shows ammo/max with colour coding by remaining ratio
+- Colour (CLR): highlights tiles by owner colour (translucent fill)
+- Lock (LCK): shows "LOCK" label only on sentry units with amber background
+- Grid (GRD): draws tile grid lines across visible viewport
+- Fog (FOG): toggles fog of war on/off (button ON = fog disabled for debug)
+- Minimap: zoom toggle (1x/2x), "Armed" toggle filters to attack-capable units only
 
 ## Phase 26: Construction & Building Enhancements — **MEDIUM PRIORITY**
 

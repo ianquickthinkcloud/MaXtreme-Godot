@@ -17,6 +17,11 @@ signal mining_distribution_changed(unit_id: int, metal: int, oil: int, gold: int
 signal jump_to_position(pos: Vector2i)  ## Phase 23: Camera jump from event log
 signal save_game_requested(slot: int, save_name: String)  ## Phase 24: Save
 signal load_game_requested(slot: int)  ## Phase 24: Load
+signal stat_overlay_changed(overlay_name: String)  ## Phase 25: Overlay toggle
+signal grid_overlay_toggled(enabled: bool)  ## Phase 25: Grid toggle
+signal fog_overlay_toggled(enabled: bool)  ## Phase 25: Fog toggle
+signal minimap_zoom_toggled()  ## Phase 25: Minimap zoom
+signal minimap_filter_toggled()  ## Phase 25: Minimap attack-only filter
 
 # References set by code
 var _sprite_cache = null
@@ -120,6 +125,9 @@ var _turn_report_panel: Window = null
 var _turn_report_list: VBoxContainer = null
 
 # --- Phase 24: Save/Load ---
+# --- Phase 25: Overlay Toggles ---
+var _active_stat_overlay: String = ""  # "", "survey", "hits", "scan", "status", "ammo", "colour", "lock"
+
 var _save_load_dialog: Window = null
 var _save_load_title: Label = null
 var _save_load_list: VBoxContainer = null
@@ -150,6 +158,7 @@ func _ready() -> void:
 	_create_alert_display()
 	_create_turn_report_panel()
 	_create_save_load_dialog()
+	_create_overlay_toolbar()
 
 
 func set_sprite_cache(cache) -> void:
@@ -1412,6 +1421,59 @@ func show_turn_report(report_items: Array) -> void:
 				  item.get("position", Vector2i(-1, -1)))
 
 	_turn_report_panel.popup_centered()
+
+
+# =============================================================================
+# PHASE 25: OVERLAY TOOLBAR
+# =============================================================================
+
+func _create_overlay_toolbar() -> void:
+	## Create a small overlay toggle bar near the bottom-left of the screen.
+	var bar := HBoxContainer.new()
+	bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	bar.offset_left = 10
+	bar.offset_bottom = -50
+	bar.offset_top = -76
+	bar.add_theme_constant_override("separation", 2)
+	add_child(bar)
+
+	var overlays := [
+		["SVY", "survey", "Survey overlay: show surveyed status"],
+		["HP", "hits", "Hits overlay: show unit HP"],
+		["SCN", "scan", "Scan overlay: show unit scan range"],
+		["STS", "status", "Status overlay: show unit state"],
+		["AMO", "ammo", "Ammo overlay: show ammo/shots"],
+		["CLR", "colour", "Colour overlay: highlight by owner"],
+		["LCK", "lock", "Lock overlay: show sentry units"],
+		["GRD", "grid", "Grid overlay: show tile grid"],
+		["FOG", "fog", "Fog of war: toggle visibility"],
+	]
+
+	for ov in overlays:
+		var btn := Button.new()
+		btn.text = ov[0]
+		btn.custom_minimum_size = Vector2(38, 24)
+		btn.add_theme_font_size_override("font_size", 9)
+		btn.tooltip_text = ov[2]
+		btn.toggle_mode = true
+		var ov_name: String = ov[1]
+		btn.toggled.connect(func(pressed: bool): _on_overlay_toggled(ov_name, pressed))
+		bar.add_child(btn)
+
+
+func _on_overlay_toggled(overlay_name: String, pressed: bool) -> void:
+	match overlay_name:
+		"grid":
+			grid_overlay_toggled.emit(pressed)
+		"fog":
+			fog_overlay_toggled.emit(pressed)
+		_:
+			if pressed:
+				_active_stat_overlay = overlay_name
+			else:
+				if _active_stat_overlay == overlay_name:
+					_active_stat_overlay = ""
+			stat_overlay_changed.emit(_active_stat_overlay)
 
 
 # =============================================================================
