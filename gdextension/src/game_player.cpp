@@ -53,6 +53,7 @@ void GamePlayer::_bind_methods() {
     // Research state
     ClassDB::bind_method(D_METHOD("get_research_levels"), &GamePlayer::get_research_levels);
     ClassDB::bind_method(D_METHOD("get_research_centers_per_area"), &GamePlayer::get_research_centers_per_area);
+    ClassDB::bind_method(D_METHOD("get_research_remaining_turns"), &GamePlayer::get_research_remaining_turns);
 
     // Economy summary
     ClassDB::bind_method(D_METHOD("get_economy_summary"), &GamePlayer::get_economy_summary);
@@ -325,6 +326,33 @@ Array GamePlayer::get_research_centers_per_area() const {
     result[5] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::SpeedResearch);
     result[6] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::ScanResearch);
     result[7] = player->getResearchCentersWorkingOnArea(cResearch::eResearchArea::CostResearch);
+    return result;
+}
+
+// ========== RESEARCH PROGRESS (Phase 21) ==========
+
+Array GamePlayer::get_research_remaining_turns() const {
+    Array result;
+    for (int i = 0; i < 8; ++i) result.push_back(0);
+    if (!player) return result;
+
+    const auto& research = player->getResearchState();
+    const auto areas = {
+        cResearch::eResearchArea::AttackResearch,
+        cResearch::eResearchArea::ShotsResearch,
+        cResearch::eResearchArea::RangeResearch,
+        cResearch::eResearchArea::ArmorResearch,
+        cResearch::eResearchArea::HitpointsResearch,
+        cResearch::eResearchArea::SpeedResearch,
+        cResearch::eResearchArea::ScanResearch,
+        cResearch::eResearchArea::CostResearch,
+    };
+    int idx = 0;
+    for (auto area : areas) {
+        int centers = player->getResearchCentersWorkingOnArea(area);
+        result[idx] = research.getRemainingTurns(area, centers);
+        idx++;
+    }
     return result;
 }
 

@@ -17,6 +17,7 @@
 #include "game/data/units/vehicle.h"
 #include "game/data/units/building.h"
 #include "game/logic/turncounter.h"
+#include "game/logic/turntimeclock.h"
 #include "game/logic/action/actionendturn.h"
 #include "game/logic/action/actionstartturn.h"
 #include "game/logic/server.h"
@@ -24,6 +25,7 @@
 #include "game/connectionmanager.h"
 #include "game/data/savegame.h"
 #include "game/data/savegameinfo.h"
+#include "game/data/gamesettings.h"
 #include "utility/log.h"
 
 using namespace godot;
@@ -70,6 +72,9 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_clan_details"), &GameEngine::get_clan_details);
     ClassDB::bind_method(D_METHOD("check_landing_position", "map_name", "pos"), &GameEngine::check_landing_position);
 
+    // Phase 21: Pre-game upgrade info
+    ClassDB::bind_method(D_METHOD("get_pregame_upgrade_info", "clan"), &GameEngine::get_pregame_upgrade_info);
+
     // Game initialization (Phase 4, updated Phase 8)
     ClassDB::bind_method(D_METHOD("new_game_test"), &GameEngine::new_game_test);
     ClassDB::bind_method(D_METHOD("new_game", "map_name", "player_names", "player_colors", "player_clans", "start_credits"),
@@ -93,6 +98,12 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_turn_state"), &GameEngine::get_turn_state);
     ClassDB::bind_method(D_METHOD("get_game_state"), &GameEngine::get_game_state);
     ClassDB::bind_method(D_METHOD("process_game_tick"), &GameEngine::process_game_tick);
+
+    // Phase 20: Turn timer & victory
+    ClassDB::bind_method(D_METHOD("get_turn_time_remaining"), &GameEngine::get_turn_time_remaining);
+    ClassDB::bind_method(D_METHOD("has_turn_deadline"), &GameEngine::has_turn_deadline);
+    ClassDB::bind_method(D_METHOD("is_victory_condition_met"), &GameEngine::is_victory_condition_met);
+    ClassDB::bind_method(D_METHOD("get_victory_type"), &GameEngine::get_victory_type);
 
     // Networking (Phase 16)
     ClassDB::bind_method(D_METHOD("get_network_mode"), &GameEngine::get_network_mode);
@@ -393,6 +404,12 @@ Array GameEngine::get_clan_details() const {
 
 bool GameEngine::check_landing_position(String map_name, Vector2i pos) const {
     return GameSetup::check_landing_position(map_name, pos);
+}
+
+// --- Phase 21: Pre-game upgrade info ---
+
+Array GameEngine::get_pregame_upgrade_info(int clan) const {
+    return GameSetup::get_pregame_upgrade_info(clan);
 }
 
 // --- Action system ---
@@ -829,4 +846,69 @@ Dictionary GameEngine::process_game_tick() {
     result["is_turn_active"] = is_turn_active();
 
     return result;
+}
+
+// ========== Phase 20: Turn Timer & Victory ==========
+
+double GameEngine::get_turn_time_remaining() const {
+    auto* m = get_active_model();
+    if (!m) return -1.0;
+    auto clock = m->getTurnTimeClock();
+    if (!clock || !clock->hasDeadline()) return -1.0;
+    auto remaining = clock->getTimeTillFirstDeadline();
+    return std::chrono::duration<double>(remaining).count();
+}
+
+bool GameEngine::has_turn_deadline() const {
+    auto* m = get_active_model();
+    if (!m) return false;
+    auto clock = m->getTurnTimeClock();
+    return clock && clock->hasDeadline();
+}
+
+bool GameEngine::is_victory_condition_met() const {
+    auto* m = get_active_model();
+    if (!m) return false;
+    auto settings = m->getGameSettings();
+    if (!settings) return false;
+
+    const auto& players = m->getPlayerList();
+    switch (settings->victoryConditionType) {
+        case eGameSettingsVictoryCondition::Death: {
+            // Only one non-defeated player remains
+            int alive = 0;
+            for (const auto& p : players) {
+                if (!p->isDefeated) alive++;
+            }
+            return alive <= 1;
+        }
+        case eGameSettingsVictoryCondition::Turns: {
+            return m->getTurnCounter()->getTurn() >= static_cast<int>(settings->victoryTurns);
+        }
+        case eGameSettingsVictoryCondition::Points: {
+            for (const auto& p : players) {
+                if (!p->isDefeated && p->getScore() >= static_cast<int>(settings->victoryPoints))
+                    return true;
+            }
+            return false;
+        }
+        default:
+            return false;
+    }
+}
+
+String GameEngine::get_victory_type() const {
+    auto* m = get_active_model();
+    if (!m) return String("none");
+    auto settings = m->getGameSettings();
+    if (!settings) return String("none");
+    switch (settings->victoryConditionType) {
+        case eGameSettingsVictoryCondition::Turns:
+            return String("turn_limit");
+        case eGameSettingsVictoryCondition::Points:
+            return String("points");
+        case eGameSettingsVictoryCondition::Death:
+        default:
+            return String("elimination");
+    }
 }

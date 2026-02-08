@@ -51,6 +51,7 @@ var _turn_transition_label: Label = null
 var _turn_transition_sublabel: Label = null
 var _turn_transition_button: Button = null
 var _sprite_cache_ref = null # Keep a reference to the shared sprite cache
+var _prev_research_levels: Dictionary = {}  # Phase 21: Track previous research levels for notifications
 
 
 func _ready() -> void:
@@ -78,6 +79,8 @@ func _ready() -> void:
 	hud.connect("end_turn_pressed", _on_end_turn_pressed)
 	hud.connect("build_pressed", _on_build_button_pressed)
 	hud.connect("command_pressed", _on_command_pressed)
+	hud.connect("research_allocation_changed", _on_research_allocation_changed)
+	hud.connect("gold_upgrade_requested", _on_gold_upgrade_requested)
 	move_animator.connect("animation_finished", _on_move_animation_finished)
 	move_animator.connect("direction_changed", _on_unit_direction_changed)
 	combat_fx.connect("effect_sequence_finished", _on_attack_animation_finished)
@@ -573,6 +576,24 @@ func _update_hud() -> void:
 		var energy = player.get_energy_balance()
 		hud.update_resource_display(storage, production, needed, energy, player.get_credits())
 
+		# Phase 20: Human resources
+		if player.has_method("get_human_balance"):
+			var humans = player.get_human_balance()
+			hud.update_human_display(humans)
+
+		# Phase 20: Score display
+		var score: int = player.get_score()
+		var victory_type: String = engine.get_victory_type()
+		# Get target points from game settings (or 0 if not points mode)
+		var target_points: int = 0  # TODO: expose from engine if needed
+		hud.update_score_display(score, victory_type, target_points)
+
+	# Phase 20: Turn timer
+	if engine.has_method("has_turn_deadline"):
+		var has_deadline: bool = engine.has_turn_deadline()
+		var time_remaining: float = engine.get_turn_time_remaining() if has_deadline else -1.0
+		hud.update_timer_display(time_remaining, has_deadline)
+
 	# End turn button
 	hud.set_end_turn_enabled(engine.is_turn_active())
 
@@ -643,9 +664,18 @@ func _update_selected_unit_hud() -> void:
 			"is_manual_fire": unit.is_manual_fire(),
 			"is_working": unit.is_working(),
 			"is_disabled": unit.is_disabled(),
+			"disabled_turns": unit.get_disabled_turns(),
 			"stored_units": stored_count,
 			"stored_resources": unit.get_stored_resources(),
 			"cargo_list": cargo_list,
+			# Phase 20: Experience, version, dated
+			"rank": unit.get_commando_rank(),
+			"rank_name": unit.get_commando_rank_name(),
+			"is_dated": unit.is_dated(),
+			"version": unit.get_version(),
+			"scan": unit.get_scan(),
+			"owner_id": unit.get_owner_id(),
+			"description": unit.get_description(),
 		})
 	else:
 		hud.clear_selected_unit()
@@ -834,6 +864,8 @@ func _on_turn_started(turn: int) -> void:
 	if selected_unit_id != -1:
 		_update_overlays()
 	_update_hud()
+	# Phase 21: Check for research level-ups
+	_check_research_notifications()
 
 
 func _on_turn_ended() -> void:
@@ -1167,6 +1199,17 @@ func _on_command_pressed(command: String) -> void:
 		_cmd_self_destroy()
 	elif command == "rename":
 		_cmd_rename()
+	elif command == "info":
+		_cmd_show_unit_info()
+	# --- Phase 21: Research & Upgrades ---
+	elif command == "open_research":
+		_cmd_open_research()
+	elif command == "open_upgrades":
+		_cmd_open_upgrades()
+	elif command == "upgrade_unit":
+		_cmd_upgrade_unit()
+	elif command == "upgrade_all":
+		_cmd_upgrade_all()
 	# --- Target-selection actions (enter selection mode) ---
 	elif command == "load":
 		_cmd_enter_mode("load")
@@ -1263,6 +1306,52 @@ func _cmd_self_destroy() -> void:
 		_refresh_after_action()
 	else:
 		print("[Game] Failed to self-destruct")
+
+
+func _cmd_show_unit_info() -> void:
+	## Open the full unit information popup.
+	var unit = _find_unit(selected_unit_id)
+	if not unit:
+		return
+	var pos = unit.get_position()
+	var mp = 0
+	var mp_max = 0
+	if pathfinder:
+		mp = pathfinder.get_movement_points(selected_unit_id)
+		mp_max = pathfinder.get_movement_points_max(selected_unit_id)
+
+	hud.show_unit_info({
+		"name": unit.get_name(),
+		"type_name": unit.get_type_name(),
+		"id": unit.get_id(),
+		"is_building": unit.is_building(),
+		"hp": unit.get_hitpoints(),
+		"hp_max": unit.get_hitpoints_max(),
+		"speed": mp,
+		"speed_max": mp_max,
+		"damage": unit.get_damage(),
+		"armor": unit.get_armor(),
+		"range": unit.get_range(),
+		"shots": unit.get_shots(),
+		"shots_max": unit.get_shots_max(),
+		"ammo": unit.get_ammo(),
+		"ammo_max": unit.get_ammo_max(),
+		"scan": unit.get_scan(),
+		"pos_x": pos.x,
+		"pos_y": pos.y,
+		"owner_id": unit.get_owner_id(),
+		"is_sentry": unit.is_sentry_active(),
+		"is_manual_fire": unit.is_manual_fire(),
+		"is_disabled": unit.is_disabled(),
+		"disabled_turns": unit.get_disabled_turns(),
+		"is_dated": unit.is_dated(),
+		"version": unit.get_version(),
+		"rank": unit.get_commando_rank(),
+		"rank_name": unit.get_commando_rank_name(),
+		"stored_units": unit.get_stored_units_count(),
+		"stored_resources": unit.get_stored_resources(),
+		"description": unit.get_description(),
+	})
 
 
 func _cmd_rename() -> void:
@@ -1399,6 +1488,23 @@ func _handle_cmd_mode_click(tile: Vector2i) -> bool:
 			_refresh_after_action()
 			return true
 
+		"upgrade_vehicle":
+			# Click on a depot/hangar to upgrade the vehicle there
+			if target_unit_id != -1 and target_unit_id != _cmd_source_id:
+				var target_unit = _find_unit(target_unit_id)
+				if target_unit and target_unit.is_building():
+					if actions.upgrade_vehicle(target_unit_id, _cmd_source_id):
+						print("[Game] Upgraded vehicle %d at depot %d" % [_cmd_source_id, target_unit_id])
+					else:
+						print("[Game] Failed to upgrade vehicle (must be stored in depot)")
+				else:
+					print("[Game] Target must be a depot building")
+			else:
+				print("[Game] No depot at ", tile)
+			_cancel_cmd_mode()
+			_refresh_after_action()
+			return true
+
 		"transfer_target":
 			if target_unit_id != -1 and target_unit_id != _cmd_source_id:
 				# Store the transfer target, show the transfer dialog
@@ -1428,6 +1534,113 @@ func _cmd_transfer_confirm(resource_type: String, amount: int) -> void:
 		print("[Game] Transfer failed")
 	_cmd_source_id = -1
 	_refresh_after_action()
+
+
+# =============================================================================
+# PHASE 21: RESEARCH & UPGRADES
+# =============================================================================
+
+func _cmd_open_research() -> void:
+	## Open the research allocation panel.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var levels: Dictionary = player.get_research_levels()
+	var centers_per_area: Array = player.get_research_centers_per_area()
+	var remaining_turns: Array = player.get_research_remaining_turns()
+	var total_centers: int = player.get_research_centers_working()
+	hud.show_research_panel(levels, centers_per_area, remaining_turns, total_centers)
+
+
+func _cmd_open_upgrades() -> void:
+	## Open the gold upgrades panel.
+	var player = engine.get_player(current_player)
+	if not player or not actions:
+		return
+	var upgradeable: Array = actions.get_upgradeable_units(current_player)
+	var credits: int = player.get_credits()
+	hud.show_upgrades_panel(upgradeable, credits)
+
+
+func _on_research_allocation_changed(areas: Array) -> void:
+	## Apply new research allocation from the panel.
+	if not actions:
+		return
+	if actions.change_research(areas):
+		print("[Game] Research allocation updated: ", areas)
+		_refresh_after_action()
+	else:
+		print("[Game] Failed to change research allocation")
+
+
+func _on_gold_upgrade_requested(id_first: int, id_second: int, stat_index: int) -> void:
+	## Purchase a gold upgrade for a unit type.
+	if not actions:
+		return
+	var cost: int = actions.buy_unit_upgrade(current_player, id_first, id_second, stat_index)
+	if cost > 0:
+		print("[Game] Purchased upgrade (stat %d) for %d.%d — cost: %d" % [stat_index, id_first, id_second, cost])
+		# Refresh the upgrades panel to show updated values
+		_cmd_open_upgrades()
+		_refresh_after_action()
+	else:
+		print("[Game] Failed to purchase upgrade")
+
+
+func _cmd_upgrade_unit() -> void:
+	## Upgrade the selected unit to the latest version.
+	if selected_unit_id == -1 or not actions:
+		return
+	var unit = _find_unit(selected_unit_id)
+	if not unit:
+		return
+	if unit.is_building():
+		# Building upgrade
+		var cost: int = actions.get_building_upgrade_cost(selected_unit_id)
+		if cost < 0:
+			print("[Game] Building already at latest version")
+			return
+		if actions.upgrade_building(selected_unit_id, false):
+			print("[Game] Upgraded building %d (cost: %d metal)" % [selected_unit_id, cost])
+			_refresh_after_action()
+		else:
+			print("[Game] Failed to upgrade building")
+	else:
+		# Vehicle upgrade — need to find a depot the vehicle is stored in.
+		# For now, try to find a nearby depot.
+		_cmd_enter_mode("upgrade_vehicle")
+
+
+func _cmd_upgrade_all() -> void:
+	## Upgrade all buildings of the same type in the sub-base.
+	if selected_unit_id == -1 or not actions:
+		return
+	if actions.upgrade_building(selected_unit_id, true):
+		print("[Game] Upgraded all buildings of same type as %d" % selected_unit_id)
+		_refresh_after_action()
+	else:
+		print("[Game] Failed to upgrade all buildings")
+
+
+func _check_research_notifications() -> void:
+	## Compare current research levels with previous to detect level-ups.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var levels: Dictionary = player.get_research_levels()
+	var area_keys := ["attack", "shots", "range", "armor", "hitpoints", "speed", "scan", "cost"]
+	var area_names := ["Attack", "Shots", "Range", "Armor", "Hitpoints", "Speed", "Scan", "Cost"]
+
+	for i in range(area_keys.size()):
+		var key: String = area_keys[i]
+		var cur_level: int = levels.get(key, 0)
+		var prev_level: int = _prev_research_levels.get(key, 0)
+		if cur_level > prev_level and prev_level > 0:
+			# Research leveled up!
+			hud.show_research_notification(area_names[i], cur_level)
+			AudioManager.play_sound("research_complete")
+
+	_prev_research_levels = levels
 
 
 func _refresh_after_action() -> void:

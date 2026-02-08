@@ -124,6 +124,13 @@ public:
     /// Loads the map temporarily if needed. Simple terrain check.
     /// Returns true if the position is on passable ground.
     static bool check_landing_position(const String& map_name, Vector2i pos);
+
+    // --- Phase 21: Pre-game upgrade info ---
+
+    /// Get upgrade info for all unit types at research level 0 (for pre-game purchasing).
+    /// Returns Array of Dicts: [{id_first, id_second, name, build_cost,
+    ///   upgrades: [{index, type, cur_value, next_price, purchased}]}]
+    static Array get_pregame_upgrade_info(int clan);
 };
 
 } // namespace godot

@@ -92,6 +92,14 @@ public:
     /// Returns 8-element Array of how many centers work on each area
     Array get_research_centers_per_area() const;
 
+    // ========== RESEARCH PROGRESS (Phase 21) ==========
+
+    /// Returns an 8-element Array of remaining turns to reach the next research
+    /// level in each area, given the current allocation. Order: Attack, Shots,
+    /// Range, Armor, Hitpoints, Speed, Scan, Cost.
+    /// Returns 0 for areas with no centers assigned.
+    Array get_research_remaining_turns() const;
+
     // ========== SUMMARY ==========
 
     /// Convenience: all economy info in one dictionary

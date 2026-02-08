@@ -123,6 +123,13 @@ public:
     /// Check if a position is valid for landing on a given map.
     bool check_landing_position(String map_name, Vector2i pos) const;
 
+    // --- Phase 21: Pre-game upgrade info ---
+
+    /// Get upgrade info for all unit types at research level 0 (for pre-game purchasing).
+    /// Returns Array of Dicts: [{id_first, id_second, name, build_cost,
+    ///   upgrades: [{index, type, cur_value, next_price, purchased}]}]
+    Array get_pregame_upgrade_info(int clan) const;
+
     // --- Game initialization (Phase 4, updated Phase 8) ---
 
     /// Start a quick test game using real data: first available map, 2 players,
@@ -225,6 +232,22 @@ public:
     /// or max_ticks is reached. Returns a Dictionary with what happened.
     /// This is the main function GDScript should call each frame.
     Dictionary process_game_tick();
+
+    // --- Phase 20: Turn Timer & Victory ---
+
+    /// Returns time remaining until turn deadline in seconds.
+    /// Returns -1.0 if no deadline is active.
+    double get_turn_time_remaining() const;
+
+    /// Returns true if a turn deadline is configured and active.
+    bool has_turn_deadline() const;
+
+    /// Returns true if the victory condition has been met.
+    /// The specific condition depends on game settings (Elimination, Turn Limit, Points).
+    bool is_victory_condition_met() const;
+
+    /// Returns the victory type as a string: "none", "elimination", "turn_limit", "points"
+    String get_victory_type() const;
 };
 
 } // namespace godot

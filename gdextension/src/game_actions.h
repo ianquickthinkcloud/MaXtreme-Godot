@@ -7,6 +7,7 @@
 #include <godot_cpp/variant/vector2i.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 
 #include <memory>
 
@@ -141,6 +142,28 @@ public:
 
     /// Upgrade a building (or all buildings of same type if all=true).
     bool upgrade_building(int building_id, bool all);
+
+    // ========== GOLD UPGRADES (Phase 21) ==========
+
+    /// Returns all unit types that can be upgraded with gold, along with their
+    /// current upgrade state. Each element is a Dictionary:
+    ///   {id_first, id_second, name, build_cost,
+    ///    upgrades: [{type, start_value, cur_value, next_price, purchased}]}
+    /// stat types: 0=Damage, 1=Shots, 2=Range, 3=Ammo, 4=Armor, 5=Hits, 6=Scan, 7=Speed
+    Array get_upgradeable_units(int player_id);
+
+    /// Purchase a single stat upgrade for a unit type.
+    /// stat_index: 0=Damage, 1=Shots, 2=Range, 3=Ammo, 4=Armor, 5=Hits, 6=Scan, 7=Speed
+    /// Returns the cost deducted (> 0), or -1 on failure.
+    int buy_unit_upgrade(int player_id, int id_first, int id_second, int stat_index);
+
+    /// Get the metal cost to upgrade a specific vehicle to the latest version.
+    /// Returns -1 if the vehicle cannot be upgraded (already at latest version).
+    int get_vehicle_upgrade_cost(int vehicle_id);
+
+    /// Get the metal cost to upgrade a specific building to the latest version.
+    /// Returns -1 if the building cannot be upgraded (already at latest version).
+    int get_building_upgrade_cost(int building_id);
 
     // ========== TURN MANAGEMENT ==========
 

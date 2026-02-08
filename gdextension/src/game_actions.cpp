@@ -41,6 +41,7 @@
 #include "game/logic/action/actionendturn.h"
 #include "game/logic/action/actionstartturn.h"
 #include "game/logic/action/actionbuyupgrades.h"
+#include "game/logic/upgradecalculator.h"
 #include "game/logic/endmoveaction.h"
 #include "game/logic/movejob.h"
 #include "utility/position.h"
@@ -85,6 +86,12 @@ void GameActions::_bind_methods() {
     ClassDB::bind_method(D_METHOD("rename_unit", "unit_id", "new_name"), &GameActions::rename_unit);
     ClassDB::bind_method(D_METHOD("upgrade_vehicle", "building_id", "vehicle_id"), &GameActions::upgrade_vehicle);
     ClassDB::bind_method(D_METHOD("upgrade_building", "building_id", "all"), &GameActions::upgrade_building);
+
+    // Gold upgrades (Phase 21)
+    ClassDB::bind_method(D_METHOD("get_upgradeable_units", "player_id"), &GameActions::get_upgradeable_units);
+    ClassDB::bind_method(D_METHOD("buy_unit_upgrade", "player_id", "id_first", "id_second", "stat_index"), &GameActions::buy_unit_upgrade);
+    ClassDB::bind_method(D_METHOD("get_vehicle_upgrade_cost", "vehicle_id"), &GameActions::get_vehicle_upgrade_cost);
+    ClassDB::bind_method(D_METHOD("get_building_upgrade_cost", "building_id"), &GameActions::get_building_upgrade_cost);
 
     // Turn management
     ClassDB::bind_method(D_METHOD("end_turn"), &GameActions::end_turn);
@@ -688,6 +695,164 @@ bool GameActions::upgrade_building(int building_id, bool all) {
         UtilityFunctions::push_warning("[MaXtreme] upgrade_building failed: ", e.what());
         return false;
     }
+}
+
+// ========== GOLD UPGRADES (Phase 21) ==========
+
+Array GameActions::get_upgradeable_units(int player_id) {
+    Array result;
+    if (!model) return result;
+
+    auto player = model->getPlayer(player_id);
+    if (!player) return result;
+
+    auto unitsDataPtr = model->getUnitsData();
+    if (!unitsDataPtr) return result;
+    const auto& unitsData = *unitsDataPtr;
+
+    const auto& research = player->getResearchState();
+    int clan = player->getClan();
+
+    // Iterate all dynamic unit data for this clan
+    const auto& allDynamic = unitsData.getDynamicUnitsData(clan);
+    for (const auto& origData : allDynamic) {
+        sID unitId = origData.getId();
+        if (!unitsData.isValidId(unitId)) continue;
+
+        const auto& staticData = unitsData.getStaticUnitData(unitId);
+        auto* curData = player->getLastUnitData(unitId);
+        if (!curData) continue;
+
+        // Create upgrade object to get prices / state
+        cUnitUpgrade upgrade;
+        upgrade.init(origData, *curData, staticData, research);
+
+        // Check if this unit has any upgradeable stats (at least one with a price)
+        bool hasUpgrades = false;
+        for (int s = 0; s < 8; s++) {
+            auto nextPrice = upgrade.upgrades[s].getNextPrice();
+            if (nextPrice && *nextPrice > 0) {
+                hasUpgrades = true;
+                break;
+            }
+            if (upgrade.upgrades[s].getCurValue() > 0 && upgrade.upgrades[s].getType() != sUnitUpgrade::eUpgradeType::None) {
+                hasUpgrades = true;
+                break;
+            }
+        }
+        if (!hasUpgrades) continue;
+
+        Dictionary unitInfo;
+        unitInfo["id_first"] = unitId.firstPart;
+        unitInfo["id_second"] = unitId.secondPart;
+        unitInfo["name"] = String(staticData.getDefaultName().c_str());
+        unitInfo["build_cost"] = origData.getBuildCost();
+
+        Array upgrades;
+        const char* typeNames[] = {"damage", "shots", "range", "ammo", "armor", "hits", "scan", "speed"};
+        for (int s = 0; s < 8; s++) {
+            const auto& u = upgrade.upgrades[s];
+            if (u.getType() == sUnitUpgrade::eUpgradeType::None) continue;
+            if (u.getCurValue() <= 0) continue;
+
+            Dictionary stat;
+            stat["index"] = s;
+            stat["type"] = String(typeNames[s]);
+            stat["cur_value"] = u.getCurValue();
+            stat["next_price"] = u.getNextPrice() ? static_cast<int>(*u.getNextPrice()) : -1;
+            stat["purchased"] = u.getPurchased();
+            upgrades.push_back(stat);
+        }
+
+        unitInfo["upgrades"] = upgrades;
+        result.push_back(unitInfo);
+    }
+
+    return result;
+}
+
+int GameActions::buy_unit_upgrade(int player_id, int id_first, int id_second, int stat_index) {
+    if (!model) return -1;
+    if (stat_index < 0 || stat_index >= 8) return -1;
+
+    auto player = model->getPlayer(player_id);
+    if (!player) return -1;
+
+    auto unitsDataPtr = model->getUnitsData();
+    if (!unitsDataPtr) return -1;
+    const auto& unitsData = *unitsDataPtr;
+
+    sID unitId;
+    unitId.firstPart = id_first;
+    unitId.secondPart = id_second;
+    if (!unitsData.isValidId(unitId)) return -1;
+
+    const auto& research = player->getResearchState();
+    int clan = player->getClan();
+    const auto& origData = unitsData.getDynamicUnitData(unitId, clan);
+    auto* curData = player->getLastUnitData(unitId);
+    if (!curData) return -1;
+
+    const auto& staticData = unitsData.getStaticUnitData(unitId);
+
+    // Initialize upgrade object
+    cUnitUpgrade upgrade;
+    upgrade.init(origData, *curData, staticData, research);
+
+    // Purchase one upgrade of the requested stat
+    int cost = upgrade.upgrades[stat_index].purchase(research);
+    if (cost <= 0) return -1;
+
+    // Check player can afford it
+    if (cost > player->getCredits()) return -1;
+
+    // Execute via action
+    std::vector<std::pair<sID, cUnitUpgrade>> upgradeVec;
+    upgradeVec.push_back(std::make_pair(unitId, upgrade));
+
+    try {
+        if (client) {
+            client->buyUpgrades(upgradeVec);
+        } else {
+            cActionBuyUpgrades action(upgradeVec);
+            action.execute(*model);
+        }
+        return cost;
+    } catch (const std::exception& e) {
+        UtilityFunctions::push_warning("[MaXtreme] buy_unit_upgrade failed: ", e.what());
+        return -1;
+    }
+}
+
+int GameActions::get_vehicle_upgrade_cost(int vehicle_id) {
+    if (!model) return -1;
+    auto* vehicle = find_vehicle(vehicle_id);
+    if (!vehicle) return -1;
+
+    auto* owner = find_unit_owner(vehicle_id);
+    if (!owner) return -1;
+
+    const auto* latestVersion = owner->getLastUnitData(vehicle->data.getId());
+    if (!latestVersion) return -1;
+    if (!vehicle->data.canBeUpgradedTo(*latestVersion)) return -1;
+
+    // Cost is 1/4 of unit build cost
+    return latestVersion->getBuildCost() / 4;
+}
+
+int GameActions::get_building_upgrade_cost(int building_id) {
+    if (!model) return -1;
+    auto* building = find_building(building_id);
+    if (!building) return -1;
+
+    auto* owner = find_unit_owner(building_id);
+    if (!owner) return -1;
+
+    const auto* latestVersion = owner->getLastUnitData(building->data.getId());
+    if (!latestVersion) return -1;
+    if (!building->data.canBeUpgradedTo(*latestVersion)) return -1;
+
+    return latestVersion->getBuildCost() / 4;
 }
 
 // ========== TURN MANAGEMENT ==========

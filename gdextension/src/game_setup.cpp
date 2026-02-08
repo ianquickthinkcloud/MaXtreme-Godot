@@ -16,6 +16,7 @@
 #include "game/data/units/building.h"
 #include "game/startup/initplayerdata.h"
 #include "resources/loaddata.h"
+#include "game/logic/upgradecalculator.h"
 #include "utility/position.h"
 #include "utility/color.h"
 #include "utility/log.h"
@@ -1029,4 +1030,68 @@ bool GameSetup::check_landing_position(const String& map_name, Vector2i pos) {
         return false;
 
     return true;
+}
+
+// --- Phase 21: Pre-game upgrade info ---
+
+Array GameSetup::get_pregame_upgrade_info(int clan) {
+    if (!ensure_data_loaded()) return Array();
+
+    const auto& unitsData = UnitsDataGlobal;
+    cResearch research;  // Default: all levels at 0
+
+    Array result;
+    const auto& allDynamic = unitsData.getDynamicUnitsData(clan);
+
+    for (const auto& origData : allDynamic) {
+        sID unitId = origData.getId();
+        if (!unitsData.isValidId(unitId)) continue;
+
+        const auto& staticData = unitsData.getStaticUnitData(unitId);
+
+        // For pre-game, "current" data is the same as "original" (no upgrades yet)
+        cUnitUpgrade upgrade;
+        upgrade.init(origData, origData, staticData, research);
+
+        // Check if this unit has any upgradeable stats
+        bool hasUpgrades = false;
+        for (int s = 0; s < 8; s++) {
+            if (upgrade.upgrades[s].getType() != sUnitUpgrade::eUpgradeType::None &&
+                upgrade.upgrades[s].getCurValue() > 0) {
+                auto price = upgrade.upgrades[s].getNextPrice();
+                if (price && *price > 0) {
+                    hasUpgrades = true;
+                    break;
+                }
+            }
+        }
+        if (!hasUpgrades) continue;
+
+        Dictionary unitInfo;
+        unitInfo["id_first"] = unitId.firstPart;
+        unitInfo["id_second"] = unitId.secondPart;
+        unitInfo["name"] = String(staticData.getDefaultName().c_str());
+        unitInfo["build_cost"] = origData.getBuildCost();
+
+        Array upgrades;
+        const char* typeNames[] = {"damage", "shots", "range", "ammo", "armor", "hits", "scan", "speed"};
+        for (int s = 0; s < 8; s++) {
+            const auto& u = upgrade.upgrades[s];
+            if (u.getType() == sUnitUpgrade::eUpgradeType::None) continue;
+            if (u.getCurValue() <= 0) continue;
+
+            Dictionary stat;
+            stat["index"] = s;
+            stat["type"] = String(typeNames[s]);
+            stat["cur_value"] = u.getCurValue();
+            stat["next_price"] = u.getNextPrice() ? static_cast<int>(*u.getNextPrice()) : -1;
+            stat["purchased"] = 0;
+            upgrades.push_back(stat);
+        }
+
+        unitInfo["upgrades"] = upgrades;
+        result.push_back(unitInfo);
+    }
+
+    return result;
 }

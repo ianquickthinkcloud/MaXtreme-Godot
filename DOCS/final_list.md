@@ -514,53 +514,52 @@ positions along the horizontal center of the map. Players have no choice.
 | 19.12 | Auto-move (surveyor AI) | **DONE** | Medium |
 | 19.13 | Unit rename (dialog popup) | **DONE** | Small |
 
-## Phase 20: In-Game Information & HUD — **HIGH PRIORITY**
+## Phase 20: In-Game Information & HUD — **IMPLEMENTED**
 
-> Players need to see what's happening.
-
-| # | Item | Status | Effort |
-|---|------|--------|--------|
-| 20.1 | Full unit status screen (`Title~Unitinfo`) | **MISSING** | Medium |
-| 20.2 | Energy balance in HUD resource bar | **MISSING** | Small |
-| 20.3 | Human resources in HUD | **MISSING** | Small |
-| 20.4 | Score display for Points victory | **EXPOSED** | Small |
-| 20.5 | Turn timer / countdown display | **MISSING** | Medium |
-| 20.6 | Turn-end deadline enforcement | **MISSING** | Medium |
-| 20.7 | Disabled unit indicator (visual + info) — pulsing red X overlay | **DONE** | Small |
-| 20.8 | Unit experience / rank display | **MISSING** | Small |
-| 20.9 | "Dated" unit indicator | **MISSING** | Small |
-| 20.10 | 2x2 (big) unit rendering & selection | **EXPOSED** | Medium |
-
-## Phase 21: Research & Upgrades — **HIGH PRIORITY**
+> All HUD information displays are now wired: resources, humans, score, turn timer,
+> unit info popup, experience/rank, dated indicator, and 2x2 unit rendering.
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 21.1 | Research panel (`Title~Labs`) — 8 areas, allocation, progress | **EXPOSED** | Large |
-| 21.2 | Gold upgrades menu (`Title~Upgrades_Menu`) | **EXPOSED** | Large |
-| 21.3 | Vehicle upgrade at depot | **EXPOSED** | Medium |
-| 21.4 | Building upgrade + "Upgrade All" | **EXPOSED** | Medium |
-| 21.5 | Research complete notification | **MISSING** | Small |
-| 21.6 | Upgrade cost display | **MISSING** | Small |
-| 21.7 | Pre-game upgrade purchasing (on Choose Units screen) | **MISSING** | Medium |
+| 20.1 | Full unit status screen (INFO button + popup with BBCode) | **DONE** | Medium |
+| 20.2 | Energy balance in HUD resource bar (was already done) | **DONE** | Small |
+| 20.3 | Human resources in HUD (Humans: X/Y +Z) | **DONE** | Small |
+| 20.4 | Score display for Points victory (top bar) | **DONE** | Small |
+| 20.5 | Turn timer / countdown display (color-coded urgency) | **DONE** | Medium |
+| 20.6 | Turn-end deadline enforcement (C++ exposed + timer display) | **DONE** | Medium |
+| 20.7 | Disabled unit indicator (pulsing red X overlay) | **DONE** | Small |
+| 20.8 | Unit experience / rank display (commando ranks in unit panel + info) | **DONE** | Small |
+| 20.9 | "Dated" unit indicator (version comparison, yellow label) | **DONE** | Small |
+| 20.10 | 2x2 (big) unit rendering & selection (vehicles + buildings) | **DONE** | Medium |
 
-**21.7 detail — Pre-game Upgrade Purchasing:**
-The original game (`sInitPlayerData::unitUpgrades`) allows players to spend gold
-buying stat upgrades for unit *types* (not individual units) during the pre-game
-Choose Units screen, before the game starts. These upgrades apply to all units of
-that type the player owns for the entire game.
+## Phase 21: Research & Upgrades — `IMPLEMENTED`
 
-- **C++ data:** `sInitPlayerData::unitUpgrades` is a `vector<pair<sID, cUnitUpgrade>>`
-- **C++ binding already exposed:** `get_clan_details()` returns per-unit stat info;
-  `actions.buy_upgrades()` exists for in-game upgrades. The pre-game variant
-  needs the same UI but charges against `start_credits` instead of in-game gold.
-- **Where to add it:** As a tab or toggle on the existing `choose_units.gd` screen.
-  Show a second panel where players can spend remaining credits on per-stat upgrades
-  (Damage, Range, Armor, HP, Scan, Speed) for each unit type.
-- **Wire into game init:** Pass the upgrades array into the config as
-  `player_unit_upgrades` (Array per player of Dicts `{id_first, id_second, upgrade_type, value}`),
-  then apply them in `setup_custom_game_ex()` before placing units.
-- **Depends on:** Phase 18 (Choose Units screen — already done), Phase 21.2 (Upgrades menu
-  pattern — can share UI components).
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| 21.1 | Research panel (`Title~Labs`) — 8 areas, allocation, progress | **DONE** | Large |
+| 21.2 | Gold upgrades menu (`Title~Upgrades_Menu`) | **DONE** | Large |
+| 21.3 | Vehicle upgrade at depot | **DONE** | Medium |
+| 21.4 | Building upgrade + "Upgrade All" | **DONE** | Medium |
+| 21.5 | Research complete notification | **DONE** | Small |
+| 21.6 | Upgrade cost display | **DONE** | Small |
+| 21.7 | Pre-game upgrade purchasing (on Choose Units screen) | **DONE** | Medium |
+
+**Implementation notes:**
+
+**C++ (GDExtension):**
+- `GamePlayer::get_research_remaining_turns()` — 8-element Array of turns to next level per area
+- `GameActions::get_upgradeable_units(player_id)` — all unit types with gold upgrade info
+- `GameActions::buy_unit_upgrade(player_id, id_first, id_second, stat_index)` — buy one stat upgrade
+- `GameActions::get_vehicle_upgrade_cost(vehicle_id)` — metal cost to upgrade vehicle
+- `GameActions::get_building_upgrade_cost(building_id)` — metal cost to upgrade building
+- `GameEngine::get_pregame_upgrade_info(clan)` — pre-game upgrade info at research level 0
+
+**GDScript:**
+- Research panel: 8-row allocation panel with sliders, level display, turns remaining, Apply button
+- Gold upgrades menu: scrollable list of unit types with per-stat BUY buttons and cost display
+- UPGRADE / UPGRADE ALL command buttons shown for dated units (buildings and vehicles)
+- Research notification toast on level-up
+- Pre-game upgrade tab on choose_units.gd with toggle, stat display, and credit tracking
 
 ## Phase 22: Mining, Resources & Economy — **HIGH PRIORITY**
 

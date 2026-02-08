@@ -42,6 +42,15 @@ var _roster: Array = []
 # Info labels in the unit info panel
 var _info_labels: Dictionary = {}
 
+# Phase 21: Pre-game upgrade purchasing
+var _upgrades_tab_visible := false
+var _upgrade_data: Array = []  # From engine.get_pregame_upgrade_info(clan)
+var _purchased_upgrades: Dictionary = {}  # key: "id_first.id_second.stat_idx" -> purchased_count
+var _upgrade_credits_spent := 0
+var _upgrade_panel: VBoxContainer = null
+var _upgrade_scroll: ScrollContainer = null
+var _upgrade_credits_label: Label = null
+
 
 func _ready() -> void:
 	add_button.pressed.connect(_on_add)
@@ -66,6 +75,7 @@ func _ready() -> void:
 		_engine.load_game_data()
 
 	_build_info_panel()
+	_build_upgrades_tab()
 	_load_player_data()
 
 
@@ -127,6 +137,9 @@ func _load_player_data() -> void:
 	_credits_remaining = _start_credits
 	_refresh_roster_display()
 	_update_credits_display()
+
+	# Phase 21: Load upgrade data for this player
+	_load_upgrade_data()
 
 	if _bridgehead_type == "mobile":
 		status_label.text = "Mobile bridgehead: buy all your starting vehicles."
@@ -191,8 +204,9 @@ func _on_add() -> void:
 	var v: Dictionary = _vehicles[idx]
 	var cost: int = v.get("cost", 0)
 
-	if cost > _credits_remaining:
-		status_label.text = "Not enough credits! Need %d, have %d." % [cost, _credits_remaining]
+	var available: int = _credits_remaining - _upgrade_credits_spent
+	if cost > available:
+		status_label.text = "Not enough credits! Need %d, have %d." % [cost, available]
 		return
 
 	# Add to roster
@@ -240,10 +254,11 @@ func _refresh_roster_display() -> void:
 
 
 func _update_credits_display() -> void:
-	credits_label.text = "Credits: %d / %d" % [_credits_remaining, _start_credits]
-	if _credits_remaining < 0:
+	var available: int = _credits_remaining - _upgrade_credits_spent
+	credits_label.text = "Credits: %d / %d" % [available, _start_credits]
+	if available < 0:
 		credits_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
-	elif _credits_remaining < _start_credits * 0.2:
+	elif available < _start_credits * 0.2:
 		credits_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
 	else:
 		credits_label.remove_theme_color_override("font_color")
@@ -279,6 +294,24 @@ func _on_done() -> void:
 	# Store in GameManager
 	GameManager.pregame_landing_units[_current_player_idx] = full_roster
 
+	# Phase 21: Store pre-game upgrades
+	if _purchased_upgrades.size() > 0:
+		var upgrade_list: Array = []
+		for key in _purchased_upgrades:
+			var parts: PackedStringArray = key.split(".")
+			if parts.size() >= 3 and _purchased_upgrades[key] > 0:
+				upgrade_list.append({
+					"id_first": int(parts[0]),
+					"id_second": int(parts[1]),
+					"stat_index": int(parts[2]),
+					"count": _purchased_upgrades[key],
+				})
+		if not GameManager.has_meta("pregame_unit_upgrades"):
+			GameManager.set_meta("pregame_unit_upgrades", {})
+		var all_upgrades: Dictionary = GameManager.get_meta("pregame_unit_upgrades", {})
+		all_upgrades[_current_player_idx] = upgrade_list
+		GameManager.set_meta("pregame_unit_upgrades", all_upgrades)
+
 	# Advance to next player or proceed to landing selection
 	_current_player_idx += 1
 
@@ -295,6 +328,136 @@ func _on_done() -> void:
 		# All players done — proceed to landing position selection
 		GameManager.pregame_current_player = 0
 		GameManager.advance_pregame_to_landing()
+
+
+# =============================================================================
+# PHASE 21: PRE-GAME UPGRADE PURCHASING
+# =============================================================================
+
+func _build_upgrades_tab() -> void:
+	## Create a toggle button and scrollable upgrades area below the info panel.
+	var toggle_btn := Button.new()
+	toggle_btn.text = "Show Stat Upgrades"
+	toggle_btn.custom_minimum_size = Vector2(200, 32)
+	toggle_btn.name = "UpgradeToggle"
+	toggle_btn.pressed.connect(func():
+		_upgrades_tab_visible = not _upgrades_tab_visible
+		toggle_btn.text = "Hide Stat Upgrades" if _upgrades_tab_visible else "Show Stat Upgrades"
+		_upgrade_scroll.visible = _upgrades_tab_visible
+		_upgrade_credits_label.visible = _upgrades_tab_visible
+	)
+	# Insert after the info panel (assumes info panel is a sibling in the scene tree)
+	unit_info_panel.get_parent().add_child(toggle_btn)
+
+	_upgrade_credits_label = Label.new()
+	_upgrade_credits_label.text = "Upgrade Credits: 0"
+	_upgrade_credits_label.add_theme_font_size_override("font_size", 13)
+	_upgrade_credits_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
+	_upgrade_credits_label.visible = false
+	unit_info_panel.get_parent().add_child(_upgrade_credits_label)
+
+	_upgrade_scroll = ScrollContainer.new()
+	_upgrade_scroll.custom_minimum_size = Vector2(0, 200)
+	_upgrade_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_upgrade_scroll.visible = false
+	unit_info_panel.get_parent().add_child(_upgrade_scroll)
+
+	_upgrade_panel = VBoxContainer.new()
+	_upgrade_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_upgrade_panel.add_theme_constant_override("separation", 3)
+	_upgrade_scroll.add_child(_upgrade_panel)
+
+
+func _load_upgrade_data() -> void:
+	## Load pre-game upgrade info for the current player's clan.
+	if not _engine:
+		return
+	var clan: int = _player_clans[_current_player_idx] if _current_player_idx < _player_clans.size() else -1
+	_upgrade_data = _engine.get_pregame_upgrade_info(clan)
+	_purchased_upgrades.clear()
+	_upgrade_credits_spent = 0
+	_refresh_upgrades_display()
+
+
+func _refresh_upgrades_display() -> void:
+	## Rebuild the upgrades list with current data and purchase state.
+	if not _upgrade_panel:
+		return
+	for child in _upgrade_panel.get_children():
+		child.queue_free()
+
+	if _upgrade_credits_label:
+		_upgrade_credits_label.text = "Upgrade Budget: %d credits left" % (_credits_remaining - _upgrade_credits_spent)
+
+	for unit_info in _upgrade_data:
+		var unit_name: String = unit_info.get("name", "?")
+		var id_first: int = unit_info.get("id_first", 0)
+		var id_second: int = unit_info.get("id_second", 0)
+		var upgrades: Array = unit_info.get("upgrades", [])
+		if upgrades.size() == 0:
+			continue
+
+		var header := Label.new()
+		header.text = unit_name
+		header.add_theme_font_size_override("font_size", 12)
+		header.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+		_upgrade_panel.add_child(header)
+
+		for stat in upgrades:
+			var stat_type: String = stat.get("type", "?")
+			var cur_val: int = stat.get("cur_value", 0)
+			var next_price: int = stat.get("next_price", -1)
+			var stat_idx: int = stat.get("index", 0)
+			var key: String = "%d.%d.%d" % [id_first, id_second, stat_idx]
+			var purchased: int = _purchased_upgrades.get(key, 0)
+
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 6)
+
+			var name_lbl := Label.new()
+			name_lbl.text = stat_type.capitalize()
+			name_lbl.add_theme_font_size_override("font_size", 11)
+			name_lbl.custom_minimum_size = Vector2(65, 0)
+			row.add_child(name_lbl)
+
+			var val_lbl := Label.new()
+			val_lbl.text = str(cur_val + purchased)
+			val_lbl.add_theme_font_size_override("font_size", 11)
+			val_lbl.add_theme_color_override("font_color",
+				Color(0.3, 0.9, 0.5) if purchased > 0 else Color(0.7, 0.75, 0.8))
+			val_lbl.custom_minimum_size = Vector2(40, 0)
+			row.add_child(val_lbl)
+
+			if next_price > 0:
+				var price_lbl := Label.new()
+				price_lbl.text = "%d cr" % next_price
+				price_lbl.add_theme_font_size_override("font_size", 10)
+				price_lbl.custom_minimum_size = Vector2(55, 0)
+				row.add_child(price_lbl)
+
+				var can_afford: bool = next_price <= (_credits_remaining - _upgrade_credits_spent)
+				var buy_btn := Button.new()
+				buy_btn.text = "+"
+				buy_btn.add_theme_font_size_override("font_size", 10)
+				buy_btn.custom_minimum_size = Vector2(30, 22)
+				buy_btn.disabled = not can_afford
+				var _key := key
+				var _price := next_price
+				buy_btn.pressed.connect(func(): _buy_pregame_upgrade(_key, _price))
+				row.add_child(buy_btn)
+
+			_upgrade_panel.add_child(row)
+
+
+func _buy_pregame_upgrade(key: String, price: int) -> void:
+	## Purchase one pre-game stat upgrade.
+	if price > (_credits_remaining - _upgrade_credits_spent):
+		return
+	_purchased_upgrades[key] = _purchased_upgrades.get(key, 0) + 1
+	_upgrade_credits_spent += price
+	_update_credits_display()
+	_refresh_upgrades_display()
+	status_label.text = "Purchased upgrade! %d credits remaining." % (_credits_remaining - _upgrade_credits_spent)
 
 
 func _show_transition(next_player_idx: int) -> void:
