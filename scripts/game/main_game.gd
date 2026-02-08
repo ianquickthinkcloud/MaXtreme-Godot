@@ -1439,7 +1439,37 @@ func _cancel_cmd_mode() -> void:
 
 func _on_command_pressed(command: String) -> void:
 	## Handle command button presses from the HUD.
-	if not game_running or selected_unit_id == -1:
+	if not game_running:
+		return
+
+	# --- Global commands (no unit selection needed) ---
+	if command == "open_casualties":
+		_cmd_open_casualties()
+		return
+	elif command == "open_player_stats":
+		_cmd_open_player_stats()
+		return
+	elif command == "open_army":
+		_cmd_open_army()
+		return
+	elif command == "open_economy":
+		_cmd_open_economy()
+		return
+	elif command == "open_research":
+		_cmd_open_research()
+		return
+	elif command == "open_upgrades":
+		_cmd_open_upgrades()
+		return
+	elif command == "open_bases":
+		_cmd_open_bases()
+		return
+	elif command == "toggle_resource_overlay":
+		_cmd_toggle_resource_overlay()
+		return
+
+	# --- Unit-specific commands ---
+	if selected_unit_id == -1:
 		return
 
 	# Cancel any active command mode
@@ -1469,10 +1499,6 @@ func _on_command_pressed(command: String) -> void:
 	elif command == "info":
 		_cmd_show_unit_info()
 	# --- Phase 21: Research & Upgrades ---
-	elif command == "open_research":
-		_cmd_open_research()
-	elif command == "open_upgrades":
-		_cmd_open_upgrades()
 	elif command == "upgrade_unit":
 		_cmd_upgrade_unit()
 	elif command == "upgrade_all":
@@ -1482,10 +1508,6 @@ func _on_command_pressed(command: String) -> void:
 		_cmd_toggle_survey()
 	elif command == "mining":
 		_cmd_open_mining()
-	elif command == "open_bases":
-		_cmd_open_bases()
-	elif command == "toggle_resource_overlay":
-		_cmd_toggle_resource_overlay()
 	# --- Phase 26: Construction Enhancements ---
 	elif command == "cancel_build":
 		_cmd_cancel_construction()
@@ -2003,6 +2025,93 @@ func _refresh_resource_overlay() -> void:
 						"value": res.get("value", 0)
 					})
 	overlay.set_resource_overlay(resource_tiles)
+
+
+# =============================================================================
+# PHASE 28: REPORTS & STATISTICS
+# =============================================================================
+
+func _cmd_open_casualties() -> void:
+	## Open the casualties report panel.
+	var report: Array = engine.get_casualties_report()
+	var player_names: Dictionary = {}
+	for i in range(engine.get_player_count()):
+		var p = engine.get_player(i)
+		if p:
+			player_names[p.get_id()] = {"name": p.get_name(), "color": p.get_color()}
+	hud.show_casualties_report(report, player_names)
+
+
+func _cmd_open_player_stats() -> void:
+	## Open the player statistics panel.
+	var players: Array = []
+	for i in range(engine.get_player_count()):
+		var p = engine.get_player(i)
+		if not p:
+			continue
+		var stats: Dictionary = p.get_game_over_stats()
+		stats["name"] = p.get_name()
+		stats["color"] = p.get_color()
+		players.append(stats)
+	hud.show_player_stats(players)
+
+
+func _cmd_open_army() -> void:
+	## Open the army overview panel with all units for the current player.
+	var units: Array = []
+
+	var vehicles: Array = engine.get_player_vehicles(current_player)
+	for v in vehicles:
+		var d: Dictionary = {}
+		d["id"] = v.get_id()
+		d["name"] = v.get_name()
+		d["type_name"] = v.get_type_name()
+		d["is_building"] = false
+		d["hp"] = v.get_hitpoints()
+		d["hp_max"] = v.get_hitpoints_max()
+		d["damage"] = v.get_damage()
+		d["armor"] = v.get_armor()
+		d["ammo"] = v.get_ammo()
+		d["ammo_max"] = v.get_ammo_max()
+		d["speed"] = v.get_speed()
+		d["position"] = v.get_position()
+		d["is_working"] = v.is_working()
+		d["is_disabled"] = v.is_disabled()
+		d["is_sentry"] = v.is_sentry_active()
+		d["can_attack"] = v.has_weapon()
+		units.append(d)
+
+	var buildings: Array = engine.get_player_buildings(current_player)
+	for b in buildings:
+		var d: Dictionary = {}
+		d["id"] = b.get_id()
+		d["name"] = b.get_name()
+		d["type_name"] = b.get_type_name()
+		d["is_building"] = true
+		d["hp"] = b.get_hitpoints()
+		d["hp_max"] = b.get_hitpoints_max()
+		d["damage"] = b.get_damage()
+		d["armor"] = b.get_armor()
+		d["ammo"] = b.get_ammo()
+		d["ammo_max"] = b.get_ammo_max()
+		d["speed"] = 0
+		d["position"] = b.get_position()
+		d["is_working"] = b.is_working()
+		d["is_disabled"] = b.is_disabled()
+		d["is_sentry"] = b.is_sentry_active()
+		d["can_attack"] = b.has_weapon()
+		units.append(d)
+
+	hud.show_army_overview(units)
+
+
+func _cmd_open_economy() -> void:
+	## Open the economy summary panel.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var economy: Dictionary = player.get_economy_summary()
+	hud.show_economy_summary(economy)
 
 
 # =============================================================================

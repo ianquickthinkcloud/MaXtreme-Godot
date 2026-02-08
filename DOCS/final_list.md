@@ -1,6 +1,6 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 27)
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 28)
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
@@ -21,14 +21,14 @@
 | 25 | Map Overlays & Toggles | DONE | 10/10 |
 | 26 | Construction & Building Enhancements | DONE | 7/7 |
 | 27 | End-Game | DONE | 8/8 |
-| **28** | **Reports & Statistics** | **UP NEXT** | **0/4** |
-| 29 | Keyboard Shortcuts & UX | TODO | 0/6 |
+| 28 | Reports & Statistics | DONE | 4/4 |
+| **29** | **Keyboard Shortcuts & UX** | **UP NEXT** | **0/6** |
 | 30 | Preferences & Settings | TODO | 0/6 |
 | 31 | Advanced Unit Features | TODO | 0/9 |
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 10 phases (83 items) | Remaining: 6 phases (40 items) | Total: 16 phases (123 items)**
+**Completed: 11 phases (87 items) | Remaining: 5 phases (36 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -756,14 +756,30 @@ positions along the horizontal center of the map. Players have no choice.
 - Victory/defeat audio: "victory" and "defeat" sound entries added to AudioManager global sounds (placeholder .ogg files); music stops on game end
 - Score display: HUD top bar now shows score for all victory types (not just Points mode), with target for Points games
 
-## Phase 28: Reports & Statistics — **LOW PRIORITY**
+## Phase 28: Reports & Statistics — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 28.1 | Casualties report screen | **MISSING** | Medium |
-| 28.2 | Player statistics panel | **EXPOSED** | Medium |
-| 28.3 | Unit list / army overview (filterable) | **MISSING** | Large |
-| 28.4 | Economy summary | **MISSING** | Medium |
+| 28.1 | Casualties report screen | **DONE** | Medium |
+| 28.2 | Player statistics panel | **DONE** | Medium |
+| 28.3 | Unit list / army overview (filterable) | **DONE** | Large |
+| 28.4 | Economy summary | **DONE** | Medium |
+
+**Implementation notes:**
+
+**C++ (GDExtension):**
+- `GameEngine::get_casualties_report()` — Returns Array of Dictionaries with per-unit-type loss data across all players from `cCasualtiesTracker`. Each entry: `{unit_type_id, unit_name, is_building, losses: [{player_id, player_name, count}], total_losses}`
+- Exposed existing `cCasualtiesTracker` data via `cModel::getCasualtiesTracker()` — tracks unit losses by type and player, with `getUnitTypesWithLosses()` and `getCasualtiesOfUnitType()`
+- Leverages already-exposed `GamePlayer::get_game_over_stats()`, `get_economy_summary()`, `get_player_vehicles()`, `get_player_buildings()`
+
+**GDScript:**
+- **Casualties panel** (`game_hud.gd`): `_create_casualties_panel()` creates scrollable Window with per-unit-type rows showing Type, Name, Total losses, and Per-player breakdown. `show_casualties_report()` populates from `get_casualties_report()` data
+- **Player statistics panel** (`game_hud.gd`): `_create_player_stats_panel()` creates Window with per-player frames showing score, built/lost tallies, alive units, eco spheres, upgrade cost, and factory/mine counts. Colour-coded per player with defeated indicator
+- **Army overview** (`game_hud.gd`): `_create_army_panel()` creates filterable Window with OptionButton filter (All/Vehicles/Buildings/Combat/Damaged/Idle), unit totals, and scrollable list with columns: Name, HP, Dmg, Arm, Ammo, Spd, Status, Position + jump button. `_on_army_filter_changed()` re-filters without re-querying engine
+- **Economy summary** (`game_hud.gd`): `_create_economy_panel()` creates Window showing credits, resource storage/net production for metal/oil/gold, energy balance, human balance, and research levels in a 4-column grid
+- **Global buttons**: Added LOSSES, STATS, ARMY, ECON buttons to `_create_global_buttons()` bottom bar. These emit via `command_pressed` signal
+- **Global command handling**: Refactored `_on_command_pressed()` in `main_game.gd` to handle global commands (reports, research, bases, overlays) before the unit-selection guard, so they work regardless of whether a unit is selected
+- `main_game.gd`: New command functions `_cmd_open_casualties()`, `_cmd_open_player_stats()`, `_cmd_open_army()`, `_cmd_open_economy()` gather data from engine and pass to HUD show functions
 
 ## Phase 29: Keyboard Shortcuts & UX — **LOW PRIORITY**
 

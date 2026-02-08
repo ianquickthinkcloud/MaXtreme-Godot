@@ -259,6 +259,12 @@ public:
 
     /// Returns true if the game is in sudden death mode
     bool is_in_sudden_death() const;
+
+    // Phase 28: Reports & Statistics
+    /// Returns casualties data for all players. Array of Dictionaries:
+    /// [{unit_type_id: "0.1", unit_name: "Tank", is_building: false,
+    ///   losses: [{player_id: 0, count: 3}, ...]}]
+    Array get_casualties_report() const;
 };
 
 } // namespace godot

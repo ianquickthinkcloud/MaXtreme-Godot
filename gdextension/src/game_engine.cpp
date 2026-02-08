@@ -18,6 +18,7 @@
 #include "game/data/units/building.h"
 #include "game/logic/turncounter.h"
 #include "game/logic/turntimeclock.h"
+#include "game/logic/casualtiestracker.h"
 #include "game/logic/action/actionendturn.h"
 #include "game/logic/action/actionstartturn.h"
 #include "game/logic/server.h"
@@ -106,6 +107,9 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_victory_type"), &GameEngine::get_victory_type);
     ClassDB::bind_method(D_METHOD("get_victory_settings"), &GameEngine::get_victory_settings);
     ClassDB::bind_method(D_METHOD("is_in_sudden_death"), &GameEngine::is_in_sudden_death);
+
+    // Phase 28: Reports & Statistics
+    ClassDB::bind_method(D_METHOD("get_casualties_report"), &GameEngine::get_casualties_report);
 
     // Networking (Phase 16)
     ClassDB::bind_method(D_METHOD("get_network_mode"), &GameEngine::get_network_mode);
@@ -968,4 +972,53 @@ bool GameEngine::is_in_sudden_death() const {
         }
     }
     return false;
+}
+
+// Phase 28: Reports & Statistics
+
+Array GameEngine::get_casualties_report() const {
+    Array result;
+    auto* m = get_active_model();
+    if (!m) return result;
+    auto tracker = m->getCasualtiesTracker();
+    if (!tracker) return result;
+
+    auto unitTypes = tracker->getUnitTypesWithLosses();
+    auto& playerList = m->getPlayerList();
+
+    for (const auto& typeID : unitTypes) {
+        Dictionary entry;
+        entry["unit_type_id"] = String((std::to_string(typeID.firstPart) + "." + std::to_string(typeID.secondPart)).c_str());
+        entry["is_building"] = typeID.isABuilding();
+
+        // Get unit name from static data
+        const auto& staticData = m->getUnitsData()->getStaticUnitData(typeID);
+        entry["unit_name"] = String(staticData.getDefaultName().c_str());
+
+        // Per-player loss counts
+        Array losses;
+        for (const auto& playerPtr : playerList) {
+            if (!playerPtr) continue;
+            int count = tracker->getCasualtiesOfUnitType(typeID, playerPtr->getId());
+            if (count > 0) {
+                Dictionary loss;
+                loss["player_id"] = playerPtr->getId();
+                loss["player_name"] = String(playerPtr->getName().c_str());
+                loss["count"] = count;
+                losses.push_back(loss);
+            }
+        }
+        entry["losses"] = losses;
+
+        // Total losses across all players
+        int total = 0;
+        for (int i = 0; i < losses.size(); i++) {
+            Dictionary l = losses[i];
+            total += static_cast<int>(l.get("count", 0));
+        }
+        entry["total_losses"] = total;
+
+        result.push_back(entry);
+    }
+    return result;
 }

@@ -137,6 +137,17 @@ var _save_load_action_button: Button = null
 var _save_load_mode: String = "save"  # "save" or "load"
 var _save_load_selected_slot: int = -1
 
+# --- Phase 28: Reports & Statistics ---
+var _casualties_panel: Window = null
+var _casualties_list: VBoxContainer = null
+var _player_stats_panel: Window = null
+var _player_stats_list: VBoxContainer = null
+var _army_panel: Window = null
+var _army_list: VBoxContainer = null
+var _army_filter_option: OptionButton = null
+var _economy_panel: Window = null
+var _economy_content: VBoxContainer = null
+
 
 func _ready() -> void:
 	end_turn_button.pressed.connect(func(): end_turn_pressed.emit())
@@ -160,6 +171,10 @@ func _ready() -> void:
 	_create_turn_report_panel()
 	_create_save_load_dialog()
 	_create_overlay_toolbar()
+	_create_casualties_panel()
+	_create_player_stats_panel()
+	_create_army_panel()
+	_create_economy_panel()
 
 
 func set_sprite_cache(cache) -> void:
@@ -214,6 +229,39 @@ func _create_global_buttons() -> void:
 	res_overlay_btn.pressed.connect(func(): command_pressed.emit("toggle_resource_overlay"))
 	bottom_bar.add_child(res_overlay_btn)
 	bottom_bar.move_child(res_overlay_btn, 3)
+
+	# Phase 28: Reports & Statistics buttons
+	var casualties_btn := Button.new()
+	casualties_btn.text = "LOSSES"
+	casualties_btn.custom_minimum_size = Vector2(70, 36)
+	casualties_btn.add_theme_font_size_override("font_size", 12)
+	casualties_btn.tooltip_text = "View casualties report"
+	casualties_btn.pressed.connect(func(): command_pressed.emit("open_casualties"))
+	bottom_bar.add_child(casualties_btn)
+
+	var stats_btn := Button.new()
+	stats_btn.text = "STATS"
+	stats_btn.custom_minimum_size = Vector2(70, 36)
+	stats_btn.add_theme_font_size_override("font_size", 12)
+	stats_btn.tooltip_text = "View player statistics"
+	stats_btn.pressed.connect(func(): command_pressed.emit("open_player_stats"))
+	bottom_bar.add_child(stats_btn)
+
+	var army_btn := Button.new()
+	army_btn.text = "ARMY"
+	army_btn.custom_minimum_size = Vector2(70, 36)
+	army_btn.add_theme_font_size_override("font_size", 12)
+	army_btn.tooltip_text = "View army overview"
+	army_btn.pressed.connect(func(): command_pressed.emit("open_army"))
+	bottom_bar.add_child(army_btn)
+
+	var econ_btn := Button.new()
+	econ_btn.text = "ECON"
+	econ_btn.custom_minimum_size = Vector2(70, 36)
+	econ_btn.add_theme_font_size_override("font_size", 12)
+	econ_btn.tooltip_text = "View economy summary"
+	econ_btn.pressed.connect(func(): command_pressed.emit("open_economy"))
+	bottom_bar.add_child(econ_btn)
 
 
 # =============================================================================
@@ -2123,3 +2171,698 @@ func show_transfer_dialog(max_amount: int) -> void:
 	_transfer_slider.value = max_amount / 2
 	_transfer_amount_label.text = "Amount: %d" % int(_transfer_slider.value)
 	_transfer_dialog.popup_centered()
+
+
+# =============================================================================
+# PHASE 28: REPORTS & STATISTICS
+# =============================================================================
+
+# --- 28.1: Casualties Report Screen ---
+
+func _create_casualties_panel() -> void:
+	_casualties_panel = Window.new()
+	_casualties_panel.title = "Casualties Report"
+	_casualties_panel.size = Vector2i(580, 500)
+	_casualties_panel.visible = false
+	_casualties_panel.transient = true
+	add_child(_casualties_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_casualties_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(scroll)
+
+	_casualties_list = VBoxContainer.new()
+	_casualties_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_casualties_list.add_theme_constant_override("separation", 4)
+	scroll.add_child(_casualties_list)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(100, 32)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): _casualties_panel.visible = false)
+	main_vbox.add_child(close_btn)
+
+	_casualties_panel.close_requested.connect(func(): _casualties_panel.visible = false)
+
+
+func show_casualties_report(report: Array, player_names: Dictionary) -> void:
+	## Populate and show the casualties report panel.
+	## report: Array of {unit_type_id, unit_name, is_building, losses: [{player_id, player_name, count}], total_losses}
+	## player_names: {player_id: {name, color}}
+	if not _casualties_panel:
+		return
+
+	for child in _casualties_list.get_children():
+		child.queue_free()
+
+	if report.is_empty():
+		var lbl := Label.new()
+		lbl.text = "No casualties recorded yet."
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.7))
+		_casualties_list.add_child(lbl)
+		_casualties_panel.popup_centered()
+		return
+
+	# Header row
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	var h_type := Label.new()
+	h_type.text = "Type"
+	h_type.add_theme_font_size_override("font_size", 12)
+	h_type.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+	h_type.custom_minimum_size.x = 100
+	header.add_child(h_type)
+	var h_name := Label.new()
+	h_name.text = "Unit"
+	h_name.add_theme_font_size_override("font_size", 12)
+	h_name.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+	h_name.custom_minimum_size.x = 140
+	h_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(h_name)
+	var h_total := Label.new()
+	h_total.text = "Total"
+	h_total.add_theme_font_size_override("font_size", 12)
+	h_total.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+	h_total.custom_minimum_size.x = 50
+	header.add_child(h_total)
+	var h_detail := Label.new()
+	h_detail.text = "By Player"
+	h_detail.add_theme_font_size_override("font_size", 12)
+	h_detail.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+	h_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(h_detail)
+	_casualties_list.add_child(header)
+
+	# Separator
+	var sep := HSeparator.new()
+	_casualties_list.add_child(sep)
+
+	for entry in report:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+
+		var type_lbl := Label.new()
+		type_lbl.text = "Building" if entry.get("is_building", false) else "Vehicle"
+		type_lbl.add_theme_font_size_override("font_size", 12)
+		type_lbl.add_theme_color_override("font_color",
+			Color(0.7, 0.5, 0.3) if entry.get("is_building", false) else Color(0.3, 0.7, 0.5))
+		type_lbl.custom_minimum_size.x = 100
+		row.add_child(type_lbl)
+
+		var name_lbl := Label.new()
+		name_lbl.text = entry.get("unit_name", "Unknown")
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95))
+		name_lbl.custom_minimum_size.x = 140
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_lbl)
+
+		var total_lbl := Label.new()
+		total_lbl.text = str(entry.get("total_losses", 0))
+		total_lbl.add_theme_font_size_override("font_size", 12)
+		total_lbl.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
+		total_lbl.custom_minimum_size.x = 50
+		row.add_child(total_lbl)
+
+		# Per-player breakdown
+		var detail_lbl := Label.new()
+		var parts: PackedStringArray = PackedStringArray()
+		for loss in entry.get("losses", []):
+			var pid: int = loss.get("player_id", -1)
+			var pname: String = loss.get("player_name", "P%d" % pid)
+			parts.append("%s: %d" % [pname, loss.get("count", 0)])
+		detail_lbl.text = "  |  ".join(parts)
+		detail_lbl.add_theme_font_size_override("font_size", 11)
+		detail_lbl.add_theme_color_override("font_color", Color(0.65, 0.7, 0.75))
+		detail_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(detail_lbl)
+
+		_casualties_list.add_child(row)
+
+	_casualties_panel.popup_centered()
+
+
+# --- 28.2: Player Statistics Panel ---
+
+func _create_player_stats_panel() -> void:
+	_player_stats_panel = Window.new()
+	_player_stats_panel.title = "Player Statistics"
+	_player_stats_panel.size = Vector2i(620, 480)
+	_player_stats_panel.visible = false
+	_player_stats_panel.transient = true
+	add_child(_player_stats_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_player_stats_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(scroll)
+
+	_player_stats_list = VBoxContainer.new()
+	_player_stats_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_player_stats_list.add_theme_constant_override("separation", 8)
+	scroll.add_child(_player_stats_list)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(100, 32)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): _player_stats_panel.visible = false)
+	main_vbox.add_child(close_btn)
+
+	_player_stats_panel.close_requested.connect(func(): _player_stats_panel.visible = false)
+
+
+func show_player_stats(players: Array) -> void:
+	## Populate and show the player statistics panel.
+	## players: Array of Dictionaries with keys:
+	##   name, color, score, built_vehicles, lost_vehicles, built_buildings, lost_buildings,
+	##   vehicles_alive, buildings_alive, eco_spheres, total_upgrade_cost, is_defeated
+	if not _player_stats_panel:
+		return
+
+	for child in _player_stats_list.get_children():
+		child.queue_free()
+
+	for p in players:
+		var frame := PanelContainer.new()
+		_player_stats_list.add_child(frame)
+
+		var vbox := VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 3)
+		frame.add_child(vbox)
+
+		# Player header
+		var header := Label.new()
+		var defeated_str: String = "  [DEFEATED]" if p.get("is_defeated", false) else ""
+		header.text = "%s%s" % [p.get("name", "Unknown"), defeated_str]
+		header.add_theme_font_size_override("font_size", 15)
+		header.add_theme_color_override("font_color", p.get("color", Color(0.8, 0.85, 0.9)))
+		vbox.add_child(header)
+
+		# Score
+		var score_lbl := Label.new()
+		score_lbl.text = "Score: %d" % p.get("score", 0)
+		score_lbl.add_theme_font_size_override("font_size", 13)
+		score_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+		vbox.add_child(score_lbl)
+
+		# Built / Lost
+		var tally_lbl := Label.new()
+		tally_lbl.text = "Vehicles: +%d built / -%d lost  |  Buildings: +%d built / -%d lost" % [
+			p.get("built_vehicles", 0), p.get("lost_vehicles", 0),
+			p.get("built_buildings", 0), p.get("lost_buildings", 0)]
+		tally_lbl.add_theme_font_size_override("font_size", 12)
+		tally_lbl.add_theme_color_override("font_color", Color(0.7, 0.8, 0.85))
+		vbox.add_child(tally_lbl)
+
+		# Alive
+		var alive_lbl := Label.new()
+		alive_lbl.text = "Alive: %d vehicles, %d buildings" % [
+			p.get("vehicles_alive", 0), p.get("buildings_alive", 0)]
+		alive_lbl.add_theme_font_size_override("font_size", 12)
+		alive_lbl.add_theme_color_override("font_color", Color(0.5, 0.8, 0.6))
+		vbox.add_child(alive_lbl)
+
+		# Extra details
+		var extra_parts: PackedStringArray = PackedStringArray()
+		var eco: int = p.get("eco_spheres", 0)
+		if eco > 0:
+			extra_parts.append("Eco Spheres: %d" % eco)
+		var upg: int = p.get("total_upgrade_cost", 0)
+		if upg > 0:
+			extra_parts.append("Upgrade Cost: %d gold" % upg)
+		var factories: int = p.get("built_factories", 0)
+		if factories > 0:
+			extra_parts.append("Factories Built: %d" % factories)
+		var mines: int = p.get("built_mines", 0)
+		if mines > 0:
+			extra_parts.append("Mines Built: %d" % mines)
+		if extra_parts.size() > 0:
+			var extra_lbl := Label.new()
+			extra_lbl.text = "  |  ".join(extra_parts)
+			extra_lbl.add_theme_font_size_override("font_size", 11)
+			extra_lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.7))
+			vbox.add_child(extra_lbl)
+
+	_player_stats_panel.popup_centered()
+
+
+# --- 28.3: Army Overview (Filterable Unit List) ---
+
+func _create_army_panel() -> void:
+	_army_panel = Window.new()
+	_army_panel.title = "Army Overview"
+	_army_panel.size = Vector2i(640, 520)
+	_army_panel.visible = false
+	_army_panel.transient = true
+	add_child(_army_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_army_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	# Filter bar
+	var filter_bar := HBoxContainer.new()
+	filter_bar.add_theme_constant_override("separation", 8)
+	main_vbox.add_child(filter_bar)
+
+	var filter_label := Label.new()
+	filter_label.text = "Filter:"
+	filter_label.add_theme_font_size_override("font_size", 13)
+	filter_bar.add_child(filter_label)
+
+	_army_filter_option = OptionButton.new()
+	_army_filter_option.add_item("All Units", 0)
+	_army_filter_option.add_item("Vehicles Only", 1)
+	_army_filter_option.add_item("Buildings Only", 2)
+	_army_filter_option.add_item("Combat Units", 3)
+	_army_filter_option.add_item("Damaged", 4)
+	_army_filter_option.add_item("Idle", 5)
+	_army_filter_option.add_theme_font_size_override("font_size", 12)
+	_army_filter_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	filter_bar.add_child(_army_filter_option)
+
+	# Totals row
+	var _army_total_label := Label.new()
+	_army_total_label.name = "TotalLabel"
+	_army_total_label.add_theme_font_size_override("font_size", 12)
+	_army_total_label.add_theme_color_override("font_color", Color(0.5, 0.65, 0.75))
+	main_vbox.add_child(_army_total_label)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(scroll)
+
+	_army_list = VBoxContainer.new()
+	_army_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_army_list.add_theme_constant_override("separation", 2)
+	scroll.add_child(_army_list)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	main_vbox.add_child(btn_row)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(100, 32)
+	close_btn.pressed.connect(func(): _army_panel.visible = false)
+	btn_row.add_child(close_btn)
+
+	_army_panel.close_requested.connect(func(): _army_panel.visible = false)
+
+
+func show_army_overview(units: Array) -> void:
+	## Populate and show the army overview.
+	## units: Array of Dictionaries with keys:
+	##   id, name, type_name, is_building, hp, hp_max, ammo, ammo_max, position,
+	##   is_working, is_disabled, is_sentry, can_attack, damage, armor, speed
+	if not _army_panel:
+		return
+
+	# Store units for filtering
+	_army_panel.set_meta("all_units", units)
+
+	# Connect filter change if not already
+	if not _army_filter_option.is_connected("item_selected", _on_army_filter_changed):
+		_army_filter_option.item_selected.connect(_on_army_filter_changed)
+
+	_army_filter_option.select(0)
+	_populate_army_list(units)
+	_army_panel.popup_centered()
+
+
+func _on_army_filter_changed(_index: int) -> void:
+	if not _army_panel or not _army_panel.has_meta("all_units"):
+		return
+	var all_units: Array = _army_panel.get_meta("all_units")
+	var filter_id: int = _army_filter_option.get_selected_id()
+
+	var filtered: Array = []
+	for u in all_units:
+		match filter_id:
+			0:  # All
+				filtered.append(u)
+			1:  # Vehicles
+				if not u.get("is_building", false):
+					filtered.append(u)
+			2:  # Buildings
+				if u.get("is_building", false):
+					filtered.append(u)
+			3:  # Combat
+				if u.get("can_attack", false):
+					filtered.append(u)
+			4:  # Damaged
+				if u.get("hp", 0) < u.get("hp_max", 1):
+					filtered.append(u)
+			5:  # Idle
+				if not u.get("is_working", false) and not u.get("is_sentry", false) and not u.get("is_disabled", false):
+					filtered.append(u)
+	_populate_army_list(filtered)
+
+
+func _populate_army_list(units: Array) -> void:
+	if not _army_list:
+		return
+
+	for child in _army_list.get_children():
+		child.queue_free()
+
+	# Update totals label
+	var total_lbl = _army_panel.find_child("TotalLabel", true, false)
+	if total_lbl:
+		var vehicles := 0
+		var buildings := 0
+		for u in units:
+			if u.get("is_building", false):
+				buildings += 1
+			else:
+				vehicles += 1
+		total_lbl.text = "Showing %d units (%d vehicles, %d buildings)" % [units.size(), vehicles, buildings]
+
+	if units.is_empty():
+		var lbl := Label.new()
+		lbl.text = "No units match the current filter."
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.7))
+		_army_list.add_child(lbl)
+		return
+
+	# Header
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 4)
+	for col in [["Name", 160], ["HP", 70], ["Dmg", 40], ["Arm", 40], ["Ammo", 55], ["Spd", 40], ["Status", 80], ["Pos", 70]]:
+		var l := Label.new()
+		l.text = col[0]
+		l.add_theme_font_size_override("font_size", 11)
+		l.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+		l.custom_minimum_size.x = col[1]
+		if col[0] == "Name":
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hdr.add_child(l)
+	_army_list.add_child(hdr)
+	_army_list.add_child(HSeparator.new())
+
+	for u in units:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+
+		# Name
+		var name_lbl := Label.new()
+		var display_name: String = u.get("name", u.get("type_name", "?"))
+		if display_name.is_empty():
+			display_name = u.get("type_name", "?")
+		name_lbl.text = display_name
+		name_lbl.add_theme_font_size_override("font_size", 11)
+		name_lbl.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95))
+		name_lbl.custom_minimum_size.x = 160
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.clip_text = true
+		row.add_child(name_lbl)
+
+		# HP bar
+		var hp: int = u.get("hp", 0)
+		var hp_max: int = u.get("hp_max", 1)
+		var hp_lbl := Label.new()
+		hp_lbl.text = "%d/%d" % [hp, hp_max]
+		hp_lbl.add_theme_font_size_override("font_size", 11)
+		var hp_ratio: float = float(hp) / max(hp_max, 1)
+		if hp_ratio > 0.6:
+			hp_lbl.add_theme_color_override("font_color", Color(0.4, 0.85, 0.5))
+		elif hp_ratio > 0.3:
+			hp_lbl.add_theme_color_override("font_color", Color(0.9, 0.8, 0.3))
+		else:
+			hp_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35))
+		hp_lbl.custom_minimum_size.x = 70
+		row.add_child(hp_lbl)
+
+		# Damage
+		var dmg_lbl := Label.new()
+		dmg_lbl.text = str(u.get("damage", 0))
+		dmg_lbl.add_theme_font_size_override("font_size", 11)
+		dmg_lbl.add_theme_color_override("font_color", Color(0.75, 0.65, 0.6))
+		dmg_lbl.custom_minimum_size.x = 40
+		row.add_child(dmg_lbl)
+
+		# Armor
+		var arm_lbl := Label.new()
+		arm_lbl.text = str(u.get("armor", 0))
+		arm_lbl.add_theme_font_size_override("font_size", 11)
+		arm_lbl.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
+		arm_lbl.custom_minimum_size.x = 40
+		row.add_child(arm_lbl)
+
+		# Ammo
+		var ammo_lbl := Label.new()
+		var ammo: int = u.get("ammo", 0)
+		var ammo_max: int = u.get("ammo_max", 0)
+		ammo_lbl.text = "%d/%d" % [ammo, ammo_max] if ammo_max > 0 else "-"
+		ammo_lbl.add_theme_font_size_override("font_size", 11)
+		ammo_lbl.add_theme_color_override("font_color", Color(0.65, 0.7, 0.75))
+		ammo_lbl.custom_minimum_size.x = 55
+		row.add_child(ammo_lbl)
+
+		# Speed
+		var spd_lbl := Label.new()
+		spd_lbl.text = str(u.get("speed", 0))
+		spd_lbl.add_theme_font_size_override("font_size", 11)
+		spd_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.7))
+		spd_lbl.custom_minimum_size.x = 40
+		row.add_child(spd_lbl)
+
+		# Status
+		var status_lbl := Label.new()
+		var status_parts: PackedStringArray = PackedStringArray()
+		if u.get("is_disabled", false):
+			status_parts.append("DIS")
+		if u.get("is_sentry", false):
+			status_parts.append("SNT")
+		if u.get("is_working", false):
+			status_parts.append("WRK")
+		status_lbl.text = " ".join(status_parts) if status_parts.size() > 0 else "OK"
+		status_lbl.add_theme_font_size_override("font_size", 10)
+		if u.get("is_disabled", false):
+			status_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35))
+		elif status_parts.size() > 0:
+			status_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
+		else:
+			status_lbl.add_theme_color_override("font_color", Color(0.5, 0.7, 0.55))
+		status_lbl.custom_minimum_size.x = 80
+		row.add_child(status_lbl)
+
+		# Position + jump button
+		var pos: Vector2i = u.get("position", Vector2i(-1, -1))
+		var pos_lbl := Label.new()
+		pos_lbl.text = "(%d,%d)" % [pos.x, pos.y]
+		pos_lbl.add_theme_font_size_override("font_size", 10)
+		pos_lbl.add_theme_color_override("font_color", Color(0.55, 0.6, 0.65))
+		pos_lbl.custom_minimum_size.x = 55
+		row.add_child(pos_lbl)
+
+		if pos != Vector2i(-1, -1):
+			var jump_btn := Button.new()
+			jump_btn.text = ">"
+			jump_btn.custom_minimum_size = Vector2(24, 20)
+			jump_btn.add_theme_font_size_override("font_size", 10)
+			jump_btn.tooltip_text = "Jump to unit"
+			var pos_copy := pos
+			jump_btn.pressed.connect(func(): jump_to_position.emit(pos_copy))
+			row.add_child(jump_btn)
+
+		_army_list.add_child(row)
+
+
+# --- 28.4: Economy Summary ---
+
+func _create_economy_panel() -> void:
+	_economy_panel = Window.new()
+	_economy_panel.title = "Economy Summary"
+	_economy_panel.size = Vector2i(500, 420)
+	_economy_panel.visible = false
+	_economy_panel.transient = true
+	add_child(_economy_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_economy_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	_economy_content = VBoxContainer.new()
+	_economy_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_economy_content.add_theme_constant_override("separation", 8)
+	main_vbox.add_child(_economy_content)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(100, 32)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): _economy_panel.visible = false)
+	main_vbox.add_child(close_btn)
+
+	_economy_panel.close_requested.connect(func(): _economy_panel.visible = false)
+
+
+func show_economy_summary(economy: Dictionary) -> void:
+	## Populate and show the economy summary panel.
+	## economy: Dictionary from GamePlayer.get_economy_summary()
+	##   {credits, resources: {metal, oil, gold, metal_max, oil_max, gold_max},
+	##    production: {metal, oil, gold}, needed: {metal, oil, gold},
+	##    energy: {production, need, max_production, max_need},
+	##    humans: {production, need, max_need},
+	##    research: {attack, shots, range, armor, hitpoints, speed, scan, cost}}
+	if not _economy_panel:
+		return
+
+	for child in _economy_content.get_children():
+		child.queue_free()
+
+	# Title
+	var title := Label.new()
+	title.text = "Economy Overview"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.3, 0.85, 1.0))
+	_economy_content.add_child(title)
+
+	# Credits
+	var credits_lbl := Label.new()
+	credits_lbl.text = "Credits: %d" % economy.get("credits", 0)
+	credits_lbl.add_theme_font_size_override("font_size", 14)
+	credits_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+	_economy_content.add_child(credits_lbl)
+
+	_economy_content.add_child(HSeparator.new())
+
+	# Resources section
+	var res: Dictionary = economy.get("resources", {})
+	var prod: Dictionary = economy.get("production", {})
+	var need: Dictionary = economy.get("needed", {})
+
+	var res_header := Label.new()
+	res_header.text = "Resources"
+	res_header.add_theme_font_size_override("font_size", 14)
+	res_header.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+	_economy_content.add_child(res_header)
+
+	for rtype in ["metal", "oil", "gold"]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+
+		var type_lbl := Label.new()
+		type_lbl.text = rtype.capitalize()
+		type_lbl.add_theme_font_size_override("font_size", 13)
+		type_lbl.custom_minimum_size.x = 60
+		row.add_child(type_lbl)
+
+		var storage_lbl := Label.new()
+		storage_lbl.text = "Storage: %d / %d" % [res.get(rtype, 0), res.get(rtype + "_max", 0)]
+		storage_lbl.add_theme_font_size_override("font_size", 12)
+		storage_lbl.add_theme_color_override("font_color", Color(0.7, 0.8, 0.85))
+		storage_lbl.custom_minimum_size.x = 150
+		row.add_child(storage_lbl)
+
+		var net_val: int = prod.get(rtype, 0) - need.get(rtype, 0)
+		var net_lbl := Label.new()
+		net_lbl.text = "Net: %s%d  (P:%d / N:%d)" % [
+			"+" if net_val >= 0 else "", net_val,
+			prod.get(rtype, 0), need.get(rtype, 0)]
+		net_lbl.add_theme_font_size_override("font_size", 12)
+		net_lbl.add_theme_color_override("font_color",
+			Color(0.4, 0.85, 0.5) if net_val >= 0 else Color(1.0, 0.5, 0.4))
+		net_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(net_lbl)
+
+		_economy_content.add_child(row)
+
+	_economy_content.add_child(HSeparator.new())
+
+	# Energy
+	var energy: Dictionary = economy.get("energy", {})
+	var e_prod: int = energy.get("production", 0)
+	var e_need: int = energy.get("need", 0)
+	var e_net: int = e_prod - e_need
+	var energy_lbl := Label.new()
+	energy_lbl.text = "Energy:  Production %d  |  Need %d  |  Net %s%d" % [
+		e_prod, e_need, "+" if e_net >= 0 else "", e_net]
+	energy_lbl.add_theme_font_size_override("font_size", 13)
+	energy_lbl.add_theme_color_override("font_color",
+		Color(0.3, 0.85, 1.0) if e_net >= 0 else Color(1.0, 0.4, 0.35))
+	_economy_content.add_child(energy_lbl)
+
+	# Humans
+	var humans: Dictionary = economy.get("humans", {})
+	var h_prod: int = humans.get("production", 0)
+	var h_need: int = humans.get("need", 0)
+	var h_net: int = h_prod - h_need
+	var humans_lbl := Label.new()
+	humans_lbl.text = "Humans:  Available %d  |  Need %d  |  Net %s%d" % [
+		h_prod, h_need, "+" if h_net >= 0 else "", h_net]
+	humans_lbl.add_theme_font_size_override("font_size", 13)
+	humans_lbl.add_theme_color_override("font_color",
+		Color(0.5, 0.8, 0.6) if h_net >= 0 else Color(1.0, 0.5, 0.4))
+	_economy_content.add_child(humans_lbl)
+
+	_economy_content.add_child(HSeparator.new())
+
+	# Research levels
+	var research: Dictionary = economy.get("research", {})
+	if not research.is_empty():
+		var research_header := Label.new()
+		research_header.text = "Research Levels"
+		research_header.add_theme_font_size_override("font_size", 14)
+		research_header.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+		_economy_content.add_child(research_header)
+
+		var areas := ["attack", "shots", "range", "armor", "hitpoints", "speed", "scan", "cost"]
+		var res_grid := GridContainer.new()
+		res_grid.columns = 4
+		res_grid.add_theme_constant_override("h_separation", 16)
+		res_grid.add_theme_constant_override("v_separation", 4)
+		for area in areas:
+			var lbl := Label.new()
+			lbl.text = "%s: %d" % [area.capitalize(), research.get(area, 0)]
+			lbl.add_theme_font_size_override("font_size", 12)
+			lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.8))
+			res_grid.add_child(lbl)
+		_economy_content.add_child(res_grid)
+
+	_economy_panel.popup_centered()
