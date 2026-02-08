@@ -639,11 +639,11 @@ func _update_hud() -> void:
 			var humans = player.get_human_balance()
 			hud.update_human_display(humans)
 
-		# Phase 20: Score display
+		# Phase 20 + 27: Score display with victory target
 		var score: int = player.get_score()
 		var victory_type: String = engine.get_victory_type()
-		# Get target points from game settings (or 0 if not points mode)
-		var target_points: int = 0  # TODO: expose from engine if needed
+		var victory_settings: Dictionary = engine.get_victory_settings() if engine.has_method("get_victory_settings") else {}
+		var target_points: int = victory_settings.get("target_points", 0)
 		hud.update_score_display(score, victory_type, target_points)
 
 	# Phase 20: Turn timer
@@ -1127,23 +1127,46 @@ func _on_quit_to_menu() -> void:
 		GameManager.go_to_main_menu()
 
 
-# --- Victory / Defeat ---
+# --- Victory / Defeat (Phase 27 enhanced) ---
+
+var _sudden_death_active := false  # Phase 27: Sudden death mode flag
 
 func _on_player_won(player_id: int) -> void:
 	var player = engine.get_player(player_id)
 	var player_name: String = player.get_name() if player else ("Player %d" % player_id)
 	print("[Game] === VICTORY: ", player_name, " wins! ===")
 
+	# Build victory details with game context
+	var victory_settings: Dictionary = engine.get_victory_settings()
+	var vtype: String = victory_settings.get("type", "elimination")
+	var details := ""
+	match vtype:
+		"turn_limit":
+			details = "Turn limit reached (%d turns)." % victory_settings.get("target_turns", 0)
+		"points":
+			details = "Score target reached (%d points)." % victory_settings.get("target_points", 0)
+		_:
+			details = "All opponents have been eliminated."
+
+	if _sudden_death_active:
+		details += "\nDecided in Sudden Death mode."
+
+	# Stop background music, play victory/defeat music
+	AudioManager.stop_music()
+
 	if player_id == current_player:
 		# We won!
 		if game_over_screen:
-			game_over_screen.show_victory(player_name)
+			game_over_screen.show_victory(player_name, details)
 			_game_paused = true
 	else:
 		# Someone else won -- we lost
 		if game_over_screen:
-			game_over_screen.show_defeat(player_name, "%s has achieved victory." % player_name)
+			game_over_screen.show_defeat(player_name, "%s has achieved victory.\n%s" % [player_name, details])
 			_game_paused = true
+
+	# Show statistics for all players
+	_show_end_game_stats()
 
 
 func _on_player_lost(player_id: int) -> void:
@@ -1153,9 +1176,45 @@ func _on_player_lost(player_id: int) -> void:
 
 	if player_id == current_player:
 		# We lost
+		AudioManager.stop_music()
 		if game_over_screen:
 			game_over_screen.show_defeat(player_name, "All your units have been destroyed.")
 			_game_paused = true
+			_show_end_game_stats()
+
+
+func _show_end_game_stats() -> void:
+	## Gather and display end-game statistics for all players.
+	if not game_over_screen:
+		return
+
+	var player_stats: Array = []
+	var player_count: int = engine.get_player_count()
+
+	for pi in range(player_count):
+		var player = engine.get_player(pi)
+		if not player:
+			continue
+
+		var stats: Dictionary = player.get_game_over_stats() if player.has_method("get_game_over_stats") else {}
+		var score_history: PackedInt32Array = player.get_score_history() if player.has_method("get_score_history") else PackedInt32Array()
+
+		player_stats.append({
+			"name": player.get_name(),
+			"color": player.get_color(),
+			"score": player.get_score(),
+			"built_vehicles": stats.get("built_vehicles", 0),
+			"lost_vehicles": stats.get("lost_vehicles", 0),
+			"built_buildings": stats.get("built_buildings", 0),
+			"lost_buildings": stats.get("lost_buildings", 0),
+			"eco_spheres": stats.get("eco_spheres", 0),
+			"is_defeated": player.is_defeated(),
+			"vehicles_alive": stats.get("vehicles_alive", player.get_vehicle_count()),
+			"buildings_alive": stats.get("buildings_alive", player.get_building_count()),
+			"score_history": score_history,
+		})
+
+	game_over_screen.show_statistics(player_stats)
 
 
 # --- Multiplayer ---
@@ -2003,8 +2062,12 @@ func _on_build_error(player_id: int, error_type: String) -> void:
 
 
 func _on_sudden_death() -> void:
-	## C++ signal: sudden death mode activated.
-	hud.show_alert("SUDDEN DEATH MODE — No more building!", Color(1.0, 0.15, 0.1))
+	## C++ signal: sudden death mode activated (Phase 27 enhanced).
+	_sudden_death_active = true
+	hud.show_alert("SUDDEN DEATH MODE — First to gain score lead wins!", Color(1.0, 0.15, 0.1))
+	# Add to event log
+	if hud.has_method("add_event"):
+		hud.add_event("SUDDEN DEATH — Victory condition tied. First player to gain score lead wins!", "", Vector2i(-1, -1))
 
 
 func _on_jump_to_position(pos: Vector2i) -> void:

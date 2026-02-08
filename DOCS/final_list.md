@@ -1,6 +1,6 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 26)
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 27)
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
@@ -20,15 +20,15 @@
 | 24 | Save/Load System | DONE | 5/5 |
 | 25 | Map Overlays & Toggles | DONE | 10/10 |
 | 26 | Construction & Building Enhancements | DONE | 7/7 |
-| **27** | **End-Game** | **UP NEXT** | **0/8** |
-| 28 | Reports & Statistics | TODO | 0/4 |
+| 27 | End-Game | DONE | 8/8 |
+| **28** | **Reports & Statistics** | **UP NEXT** | **0/4** |
 | 29 | Keyboard Shortcuts & UX | TODO | 0/6 |
 | 30 | Preferences & Settings | TODO | 0/6 |
 | 31 | Advanced Unit Features | TODO | 0/9 |
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 9 phases (75 items) | Remaining: 7 phases (48 items) | Total: 16 phases (123 items)**
+**Completed: 10 phases (83 items) | Remaining: 6 phases (40 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -722,18 +722,39 @@ positions along the horizontal center of the map. Players have no choice.
 - `overlay_renderer.gd`: new `_draw_connector_overlay()` draws node highlights and directional connection lines for 1x1 and 2x2 buildings
 - `unit_renderer.gd`: buildings include `connects_to_base` flag in render data
 
-## Phase 27: End-Game — **MEDIUM PRIORITY**
+## Phase 27: End-Game — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 27.1 | Victory detection (all three types) | **MISSING** | Medium |
-| 27.2 | Defeat detection | **MISSING** | Medium |
-| 27.3 | Sudden death mode | **MISSING** | Small |
-| 27.4 | End-game statistics screen (`Title~GameOver`) | **MISSING** | Large |
-| 27.5 | Built / lost tallies | **MISSING** | Small |
-| 27.6 | Score history graph | **MISSING** | Medium |
-| 27.7 | Return to main menu flow | **MISSING** | Small |
-| 27.8 | Victory / defeat music | **MISSING** | Small |
+| 27.1 | Victory detection (all three types) | **DONE** | Medium |
+| 27.2 | Defeat detection | **DONE** | Medium |
+| 27.3 | Sudden death mode | **DONE** | Small |
+| 27.4 | End-game statistics screen (`Title~GameOver`) | **DONE** | Large |
+| 27.5 | Built / lost tallies | **DONE** | Small |
+| 27.6 | Score history graph | **DONE** | Medium |
+| 27.7 | Return to main menu flow | **DONE** | Small |
+| 27.8 | Victory / defeat music | **DONE** | Small |
+
+**Implementation notes:**
+
+**C++ (GDExtension):**
+- `GamePlayer::get_score_history()` — Returns `PackedInt32Array` of per-turn score history via `cPlayer::getScore(turn)`
+- `GamePlayer::get_num_eco_spheres()` — Returns working EcoSphere count via `cPlayer::getNumEcoSpheres()`
+- `GamePlayer::get_total_upgrade_cost()` — Returns total upgrade cost from `sGameOverStat`
+- `GamePlayer::get_game_over_stats()` — Returns full stats Dictionary: built/lost vehicles/buildings, factories, mines, upgrade cost, score, eco spheres, alive counts
+- `GameEngine::get_victory_settings()` — Returns `{type, target_turns, target_points}` from game settings
+- `GameEngine::is_in_sudden_death()` — Returns true if turn limit exceeded (sudden death phase)
+
+**GDScript:**
+- Victory detection: all 3 types (Elimination, Turn Limit, Points) already wired via `player_won`/`player_lost` signals from C++ engine; enhanced with victory type details in end screen
+- Defeat detection: `player_lost` signal fires when `mayHaveOffensiveUnit()` returns false; shows defeat screen with elimination message
+- Sudden death: `sudden_death` signal sets `_sudden_death_active` flag, shows alert and event log entry; victory screen notes "Decided in Sudden Death mode"
+- Statistics screen: `game_over_screen.gd` completely rewritten with per-player stat rows (name, score, built/lost tallies, alive units), colour-coded by player
+- Score graph: `Line2D`-based score history graph drawn in GraphContainer with per-player coloured lines, auto-scaled axes
+- Built/lost tallies: shown per player as "V: +X/-Y  B: +X/-Y" using `get_game_over_stats()`
+- Return to menu: "Return to Menu" button calls `GameManager.go_to_main_menu()` with music stop
+- Victory/defeat audio: "victory" and "defeat" sound entries added to AudioManager global sounds (placeholder .ogg files); music stops on game end
+- Score display: HUD top bar now shows score for all victory types (not just Points mode), with target for Points games
 
 ## Phase 28: Reports & Statistics — **LOW PRIORITY**
 

@@ -39,6 +39,12 @@ void GamePlayer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_built_buildings_count"), &GamePlayer::get_built_buildings_count);
     ClassDB::bind_method(D_METHOD("get_lost_buildings_count"), &GamePlayer::get_lost_buildings_count);
 
+    // Phase 27: End-game stats
+    ClassDB::bind_method(D_METHOD("get_score_history"), &GamePlayer::get_score_history);
+    ClassDB::bind_method(D_METHOD("get_num_eco_spheres"), &GamePlayer::get_num_eco_spheres);
+    ClassDB::bind_method(D_METHOD("get_total_upgrade_cost"), &GamePlayer::get_total_upgrade_cost);
+    ClassDB::bind_method(D_METHOD("get_game_over_stats"), &GamePlayer::get_game_over_stats);
+
     // Base resource storage (Phase 8)
     ClassDB::bind_method(D_METHOD("get_resource_storage"), &GamePlayer::get_resource_storage);
     ClassDB::bind_method(D_METHOD("get_resource_production"), &GamePlayer::get_resource_production);
@@ -161,6 +167,56 @@ int GamePlayer::get_built_buildings_count() const {
 int GamePlayer::get_lost_buildings_count() const {
     if (!player) return 0;
     return static_cast<int>(player->getGameOverStat().lostBuildingsCount);
+}
+
+// --- Phase 27: End-game stats ---
+
+PackedInt32Array GamePlayer::get_score_history() const {
+    PackedInt32Array result;
+    if (!player) return result;
+    // getScore(turn) returns the historical score for that turn.
+    // We iterate from turn 1 up to current score to build the array.
+    // getScore(turn) handles out-of-range by returning the latest score.
+    int current = player->getScore();
+    // Try turns 1..N until we exhaust history or exceed current
+    for (unsigned int t = 1; ; t++) {
+        int s = player->getScore(t);
+        result.push_back(s);
+        // If the score hasn't changed from the previous call with a higher turn,
+        // we've reached the end of the history
+        if (s == current) break;
+        if (t > 10000) break; // Safety limit
+    }
+    return result;
+}
+
+int GamePlayer::get_num_eco_spheres() const {
+    if (!player) return 0;
+    return player->getNumEcoSpheres();
+}
+
+int GamePlayer::get_total_upgrade_cost() const {
+    if (!player) return 0;
+    return static_cast<int>(player->getGameOverStat().totalUpgradeCost);
+}
+
+Dictionary GamePlayer::get_game_over_stats() const {
+    Dictionary result;
+    if (!player) return result;
+    const auto& stats = player->getGameOverStat();
+    result["built_vehicles"] = static_cast<int>(stats.builtVehiclesCount);
+    result["lost_vehicles"] = static_cast<int>(stats.lostVehiclesCount);
+    result["built_buildings"] = static_cast<int>(stats.builtBuildingsCount);
+    result["lost_buildings"] = static_cast<int>(stats.lostBuildingsCount);
+    result["built_factories"] = static_cast<int>(stats.builtFactoriesCount);
+    result["built_mines"] = static_cast<int>(stats.builtMineStationCount);
+    result["total_upgrade_cost"] = static_cast<int>(stats.totalUpgradeCost);
+    result["score"] = player->getScore();
+    result["eco_spheres"] = player->getNumEcoSpheres();
+    result["is_defeated"] = player->isDefeated;
+    result["vehicles_alive"] = static_cast<int>(player->getVehicles().size());
+    result["buildings_alive"] = static_cast<int>(player->getBuildings().size());
+    return result;
 }
 
 // ========== BASE RESOURCE STORAGE (Phase 8) ==========

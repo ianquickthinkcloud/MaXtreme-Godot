@@ -61,6 +61,19 @@ public:
     int get_built_buildings_count() const;
     int get_lost_buildings_count() const;
 
+    // --- Phase 27: End-game stats ---
+    /// Returns the score history as PackedInt32Array (one entry per turn)
+    PackedInt32Array get_score_history() const;
+
+    /// Returns the number of working EcoSpheres
+    int get_num_eco_spheres() const;
+
+    /// Returns total upgrade cost spent
+    int get_total_upgrade_cost() const;
+
+    /// Returns full game-over statistics as a Dictionary
+    Dictionary get_game_over_stats() const;
+
     // ========== BASE RESOURCE STORAGE (Phase 8) ==========
 
     /// Returns {metal, oil, gold, metal_max, oil_max, gold_max}

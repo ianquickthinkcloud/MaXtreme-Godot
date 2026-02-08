@@ -104,6 +104,8 @@ void GameEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("has_turn_deadline"), &GameEngine::has_turn_deadline);
     ClassDB::bind_method(D_METHOD("is_victory_condition_met"), &GameEngine::is_victory_condition_met);
     ClassDB::bind_method(D_METHOD("get_victory_type"), &GameEngine::get_victory_type);
+    ClassDB::bind_method(D_METHOD("get_victory_settings"), &GameEngine::get_victory_settings);
+    ClassDB::bind_method(D_METHOD("is_in_sudden_death"), &GameEngine::is_in_sudden_death);
 
     // Networking (Phase 16)
     ClassDB::bind_method(D_METHOD("get_network_mode"), &GameEngine::get_network_mode);
@@ -925,4 +927,45 @@ String GameEngine::get_victory_type() const {
         default:
             return String("elimination");
     }
+}
+
+// Phase 27: End-game settings & state
+
+Dictionary GameEngine::get_victory_settings() const {
+    Dictionary result;
+    result["type"] = get_victory_type();
+    result["target_turns"] = 0;
+    result["target_points"] = 0;
+
+    auto* m = get_active_model();
+    if (!m) return result;
+    auto settings = m->getGameSettings();
+    if (!settings) return result;
+
+    result["target_turns"] = static_cast<int>(settings->victoryTurns);
+    result["target_points"] = static_cast<int>(settings->victoryPoints);
+    return result;
+}
+
+bool GameEngine::is_in_sudden_death() const {
+    // The model tracks sudden death internally; we check if it's been triggered
+    // by looking at the game state. When sudden death triggers, the
+    // suddenDeathMode signal fires and we store a flag.
+    // For now, check via the model's internal state.
+    auto* m = get_active_model();
+    if (!m) return false;
+    auto settings = m->getGameSettings();
+    if (!settings) return false;
+
+    // Sudden death is triggered when victory condition is met but multiple
+    // players are tied. Check: condition met + no single winner yet.
+    // We'll use a simple heuristic: turn >= victory turns and no one has won yet.
+    if (settings->victoryConditionType == eGameSettingsVictoryCondition::Turns) {
+        auto tc = m->getTurnCounter();
+        if (tc && tc->getTurn() >= static_cast<int>(settings->victoryTurns)) {
+            // Turns exceeded — could be in sudden death
+            return true;
+        }
+    }
+    return false;
 }

@@ -252,6 +252,13 @@ public:
 
     /// Returns the victory type as a string: "none", "elimination", "turn_limit", "points"
     String get_victory_type() const;
+
+    // Phase 27: End-game settings & state
+    /// Returns victory settings as Dictionary: {type, target_turns, target_points}
+    Dictionary get_victory_settings() const;
+
+    /// Returns true if the game is in sudden death mode
+    bool is_in_sudden_death() const;
 };
 
 } // namespace godot

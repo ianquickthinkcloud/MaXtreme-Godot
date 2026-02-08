@@ -40,6 +40,10 @@ var _global_sounds: Dictionary = {
 	"click": SOUNDS_BASE + "arm.ogg",  # Reuse arm.ogg for UI clicks
 	"build_place": SOUNDS_BASE + "arm.ogg",
 	"turn_end": SOUNDS_BASE + "absorb.ogg",
+	# Phase 27: Victory/defeat sounds (use existing sounds as placeholders)
+	"victory": SOUNDS_BASE + "Chat.ogg",
+	"defeat": SOUNDS_BASE + "absorb.ogg",
+	"research_complete": SOUNDS_BASE + "arm.ogg",
 }
 
 

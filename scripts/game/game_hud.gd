@@ -1713,7 +1713,7 @@ func update_human_display(humans: Dictionary) -> void:
 
 
 func update_score_display(score: int, victory_type: String, target_points: int) -> void:
-	## Show score in top bar (only for Points victory games).
+	## Show score in top bar. Shows target for Points victory; always shows score.
 	if not _score_label:
 		return
 	if victory_type == "points" and target_points > 0:
@@ -1723,6 +1723,14 @@ func update_score_display(score: int, victory_type: String, target_points: int) 
 			_score_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
 		else:
 			_score_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
+	elif victory_type == "turn_limit":
+		_score_label.text = "Score: %d" % score
+		_score_label.visible = true
+		_score_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
+	elif score > 0:
+		_score_label.text = "Score: %d" % score
+		_score_label.visible = true
+		_score_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
 	else:
 		_score_label.visible = false
 
