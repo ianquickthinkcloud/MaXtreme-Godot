@@ -237,15 +237,17 @@ func _draw() -> void:
 	# Phase 30: Read display settings from GameManager
 	var show_shadows := true
 	var show_effects := true
+	var show_tracks := true
 	var gm = get_node_or_null("/root/GameManager")
 	if gm and gm.settings:
 		show_shadows = gm.settings.get("display_shadows", true)
 		show_effects = gm.settings.get("display_effects", true)
+		show_tracks = gm.settings.get("display_tracks", true)
 
 	# Phase 31: Draw vehicle tracks (before shadows and units)
 	if show_tracks and _track_points.size() > 0:
 		for tp in _track_points:
-			var alpha := 1.0 - (tp["age"] / TRACK_MAX_AGE)
+			var alpha: float = 1.0 - (float(tp["age"]) / TRACK_MAX_AGE)
 			alpha = alpha * 0.3  # Subtle
 			draw_circle(tp["pos"], 2.0, Color(0.35, 0.3, 0.25, alpha))
 
@@ -259,11 +261,6 @@ func _draw() -> void:
 			if _is_hidden_by_fog(unit):
 				continue
 			_draw_shadow(unit, world_pos)
-
-	# Phase 31: Read display_tracks setting
-	var show_tracks := true
-	if gm and gm.settings:
-		show_tracks = gm.settings.get("display_tracks", true)
 
 	# Pass 2: Units
 	for unit in _unit_data:
@@ -749,7 +746,7 @@ func _draw_badge_sentry(pos: Vector2) -> void:
 	var points_bot := PackedVector2Array()
 	for i in range(9):
 		var t := float(i) / 8.0
-		var angle := lerp(-0.8, 0.8, t)
+		var angle: float = lerpf(-0.8, 0.8, t)
 		points_top.append(pos + Vector2(cos(angle) * 5.0, sin(angle) * 3.0 - 1.5))
 		points_bot.append(pos + Vector2(cos(angle) * 5.0, -sin(angle) * 3.0 + 1.5))
 
@@ -820,10 +817,10 @@ func _draw_stealth_indicator(world_pos: Vector2) -> void:
 		world_pos + Vector2(-half, half),
 	]
 	for i in range(4):
-		var from := corners[i]
-		var to := corners[(i + 1) % 4]
+		var from: Vector2 = corners[i]
+		var to: Vector2 = corners[(i + 1) % 4]
 		# Draw dashed (every other segment)
-		var mid := (from + to) / 2.0
+		var mid: Vector2 = (from + to) / 2.0
 		draw_line(from, mid, shimmer_color, 1.0)
 
 
