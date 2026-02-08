@@ -867,7 +867,7 @@ func _on_building_selected_ex(type_id: String, type_name: String, is_big: bool, 
 		build_panel.close()
 	# Clear movement overlays and show build preview instead
 	overlay.clear_all()
-	var speed_label := ["1x", "2x", "4x"][clampi(speed, 0, 2)]
+	var speed_label: String = ["1x", "2x", "4x"][clampi(speed, 0, 2)]
 	print("[Game] Build mode: placing %s (%s, cost: %d, speed: %s)" % [type_name, "2x2" if is_big else "1x1", cost, speed_label])
 
 
@@ -888,7 +888,7 @@ func _update_build_preview(hover_tile: Vector2i) -> void:
 	overlay.set_build_preview(hover_tile, _build_is_big, valid)
 
 	# Phase 26: Show cost/time info in the tile label
-	var speed_label := ["1x", "2x", "4x"][clampi(_build_speed, 0, 2)]
+	var speed_label: String = ["1x", "2x", "4x"][clampi(_build_speed, 0, 2)]
 	var unit = _find_unit(_build_constructor_id)
 	if unit:
 		var turbo = unit.get_turbo_build_info(_build_type_id)
@@ -949,7 +949,7 @@ func _handle_build_click() -> void:
 		var result = actions.start_build(_build_constructor_id, _build_type_id, build_speed, tile)
 		if result:
 			AudioManager.play_sound("build_place")
-			var speed_label := ["1x", "2x", "4x"][clampi(build_speed, 0, 2)]
+			var speed_label: String = ["1x", "2x", "4x"][clampi(build_speed, 0, 2)]
 			print("[Game] Started building %s at (%d, %d) [speed: %s]" % [_build_type_name, tile.x, tile.y, speed_label])
 			_cancel_build_mode()
 			# Refresh everything
@@ -2319,20 +2319,20 @@ func _finish_box_select(screen_pos: Vector2) -> void:
 		return
 
 	# Convert screen rectangle corners to world positions then to tiles
-	var world_tl := camera.get_global_transform().affine_inverse() * tl
-	var world_br := camera.get_global_transform().affine_inverse() * br
+	var world_tl: Vector2 = camera.get_global_transform().affine_inverse() * tl
+	var world_br: Vector2 = camera.get_global_transform().affine_inverse() * br
 
 	# More reliable: use screen_to_world via camera transform
-	var vp_size := get_viewport_rect().size
-	var cam_pos := camera.get_screen_center_position()
-	var cam_zoom := camera.zoom
+	var vp_size: Vector2 = get_viewport_rect().size
+	var cam_pos: Vector2 = camera.get_screen_center_position()
+	var cam_zoom: Vector2 = camera.zoom
 
 	# Convert screen coords to world coords
 	world_tl = cam_pos + (tl - vp_size / 2.0) / cam_zoom
 	world_br = cam_pos + (br - vp_size / 2.0) / cam_zoom
 
-	var tile_tl := map_renderer.world_to_tile(world_tl)
-	var tile_br := map_renderer.world_to_tile(world_br)
+	var tile_tl: Vector2i = map_renderer.world_to_tile(world_tl)
+	var tile_br: Vector2i = map_renderer.world_to_tile(world_br)
 
 	# Find our units in the box
 	var selected_ids: Array = []
