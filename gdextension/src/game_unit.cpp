@@ -122,6 +122,12 @@ void GameUnit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("connects_to_base"), &GameUnit::connects_to_base);
     ClassDB::bind_method(D_METHOD("get_energy_production"), &GameUnit::get_energy_production);
     ClassDB::bind_method(D_METHOD("get_energy_need"), &GameUnit::get_energy_need);
+
+    // Phase 26: Construction enhancements
+    ClassDB::bind_method(D_METHOD("get_turbo_build_info", "building_type_id"), &GameUnit::get_turbo_build_info);
+    ClassDB::bind_method(D_METHOD("can_build_path"), &GameUnit::can_build_path);
+    ClassDB::bind_method(D_METHOD("get_connection_flags"), &GameUnit::get_connection_flags);
+    ClassDB::bind_method(D_METHOD("get_max_build_factor"), &GameUnit::get_max_build_factor);
 }
 
 GameUnit::GameUnit() {}
@@ -712,4 +718,89 @@ Array GameUnit::get_stored_units() const {
         result.push_back(entry);
     }
     return result;
+}
+
+// ========== PHASE 26: CONSTRUCTION ENHANCEMENTS ==========
+
+Dictionary GameUnit::get_turbo_build_info(String building_type_id) const {
+    Dictionary result;
+    result["turns_0"] = 0; result["cost_0"] = 0;
+    result["turns_1"] = 0; result["cost_1"] = 0;
+    result["turns_2"] = 0; result["cost_2"] = 0;
+
+    auto* v = as_vehicle();
+    if (!v) return result;
+
+    // Parse building type ID
+    std::string idStr = building_type_id.utf8().get_data();
+    sID buildingID;
+    auto dotPos = idStr.find('.');
+    if (dotPos != std::string::npos) {
+        buildingID.firstPart = std::stoi(idStr.substr(0, dotPos));
+        buildingID.secondPart = std::stoi(idStr.substr(dotPos + 1));
+    }
+
+    // Get the build cost from the player's latest unit data
+    int buildCost = 0;
+    if (v->getOwner()) {
+        const auto* lastData = v->getOwner()->getLastUnitData(buildingID);
+        if (lastData) buildCost = lastData->getBuildCost();
+    }
+    if (buildCost <= 0) {
+        // Fallback to global data
+        const auto& dyn = UnitsDataGlobal.getDynamicUnitData(buildingID, -1);
+        buildCost = dyn.getBuildCost();
+    }
+
+    std::array<int, 3> turboBuildTurns;
+    std::array<int, 3> turboBuildCosts;
+    v->calcTurboBuild(turboBuildTurns, turboBuildCosts, buildCost);
+
+    result["turns_0"] = turboBuildTurns[0];
+    result["cost_0"] = turboBuildCosts[0];
+    result["turns_1"] = turboBuildTurns[1];
+    result["cost_1"] = turboBuildCosts[1];
+    result["turns_2"] = turboBuildTurns[2];
+    result["cost_2"] = turboBuildCosts[2];
+
+    return result;
+}
+
+bool GameUnit::can_build_path() const {
+    auto* v = as_vehicle();
+    if (!v) return false;
+    return v->getStaticUnitData().vehicleData.canBuildPath;
+}
+
+Dictionary GameUnit::get_connection_flags() const {
+    Dictionary result;
+    result["connects_to_base"] = false;
+    result["BaseN"] = false;
+    result["BaseE"] = false;
+    result["BaseS"] = false;
+    result["BaseW"] = false;
+    result["BaseBN"] = false;
+    result["BaseBE"] = false;
+    result["BaseBS"] = false;
+    result["BaseBW"] = false;
+
+    auto* b = as_building();
+    if (!b) return result;
+
+    result["connects_to_base"] = b->getStaticData().connectsToBase;
+    result["BaseN"] = b->BaseN;
+    result["BaseE"] = b->BaseE;
+    result["BaseS"] = b->BaseS;
+    result["BaseW"] = b->BaseW;
+    result["BaseBN"] = b->BaseBN;
+    result["BaseBE"] = b->BaseBE;
+    result["BaseBS"] = b->BaseBS;
+    result["BaseBW"] = b->BaseBW;
+
+    return result;
+}
+
+int GameUnit::get_max_build_factor() const {
+    if (!unit) return 0;
+    return unit->getStaticUnitData().buildingData.maxBuildFactor;
 }

@@ -64,6 +64,7 @@ void GameActions::_bind_methods() {
 
     // Construction
     ClassDB::bind_method(D_METHOD("start_build", "vehicle_id", "building_type_id", "build_speed", "build_pos"), &GameActions::start_build);
+    ClassDB::bind_method(D_METHOD("start_build_path", "vehicle_id", "building_type_id", "build_speed", "build_pos", "path_end"), &GameActions::start_build_path);
     ClassDB::bind_method(D_METHOD("finish_build", "unit_id", "escape_pos"), &GameActions::finish_build);
     ClassDB::bind_method(D_METHOD("change_build_list", "building_id", "build_list", "build_speed", "repeat"), &GameActions::change_build_list);
 
@@ -340,6 +341,39 @@ bool GameActions::start_build(int vehicle_id, String building_type_id, int build
         return true;
     } catch (const std::exception& e) {
         UtilityFunctions::push_warning("[MaXtreme] start_build failed: ", e.what());
+        return false;
+    }
+}
+
+bool GameActions::start_build_path(int vehicle_id, String building_type_id, int build_speed, Vector2i build_pos, Vector2i path_end) {
+    if (!model) return false;
+    auto* vehicle = find_vehicle(vehicle_id);
+    if (!vehicle) {
+        UtilityFunctions::push_warning("[MaXtreme] start_build_path: vehicle not found: ", vehicle_id);
+        return false;
+    }
+
+    std::string idStr = building_type_id.utf8().get_data();
+    sID buildingID;
+    auto dotPos = idStr.find('.');
+    if (dotPos != std::string::npos) {
+        buildingID.firstPart = std::stoi(idStr.substr(0, dotPos));
+        buildingID.secondPart = std::stoi(idStr.substr(dotPos + 1));
+    }
+
+    cPosition buildPosition(build_pos.x, build_pos.y);
+    cPosition pathEndPosition(path_end.x, path_end.y);
+
+    try {
+        if (client) {
+            client->startBuildPath(*vehicle, buildingID, build_speed, buildPosition, pathEndPosition);
+        } else {
+            cActionStartBuild action(*vehicle, buildingID, build_speed, buildPosition, pathEndPosition);
+            action.execute(*model);
+        }
+        return true;
+    } catch (const std::exception& e) {
+        UtilityFunctions::push_warning("[MaXtreme] start_build_path failed: ", e.what());
         return false;
     }
 }

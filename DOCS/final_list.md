@@ -1,6 +1,6 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-08
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 26)
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
@@ -19,8 +19,8 @@
 | 23 | Notifications & Event Log | DONE | 7/7 |
 | 24 | Save/Load System | DONE | 5/5 |
 | 25 | Map Overlays & Toggles | DONE | 10/10 |
-| **26** | **Construction & Building Enhancements** | **UP NEXT** | **0/7** |
-| 27 | End-Game | TODO | 0/8 |
+| 26 | Construction & Building Enhancements | DONE | 7/7 |
+| **27** | **End-Game** | **UP NEXT** | **0/8** |
 | 28 | Reports & Statistics | TODO | 0/4 |
 | 29 | Keyboard Shortcuts & UX | TODO | 0/6 |
 | 30 | Preferences & Settings | TODO | 0/6 |
@@ -28,7 +28,7 @@
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 8 phases (68 items) | Remaining: 8 phases (55 items) | Total: 16 phases (123 items)**
+**Completed: 9 phases (75 items) | Remaining: 7 phases (48 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -691,17 +691,36 @@ positions along the horizontal center of the map. Players have no choice.
 - Fog (FOG): toggles fog of war on/off (button ON = fog disabled for debug)
 - Minimap: zoom toggle (1x/2x), "Armed" toggle filters to attack-capable units only
 
-## Phase 26: Construction & Building Enhancements — **MEDIUM PRIORITY**
+## Phase 26: Construction & Building Enhancements — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 26.1 | Resource cost display before placement | **MISSING** | Small |
-| 26.2 | Build time estimate display | **MISSING** | Small |
-| 26.3 | Cancel construction in progress | **MISSING** | Small |
-| 26.4 | Turbo build (speed multiplier) | **MISSING** | Medium |
-| 26.5 | Road / bridge / platform building | **MISSING** | Large |
-| 26.6 | Bridge / platform rendering | **MISSING** | Medium |
-| 26.7 | Connector buildings (base network visualisation) | **MISSING** | Medium |
+| 26.1 | Resource cost display before placement | **DONE** | Small |
+| 26.2 | Build time estimate display | **DONE** | Small |
+| 26.3 | Cancel construction in progress | **DONE** | Small |
+| 26.4 | Turbo build (speed multiplier) | **DONE** | Medium |
+| 26.5 | Road / bridge / platform building | **DONE** | Large |
+| 26.6 | Bridge / platform rendering | **DONE** | Medium |
+| 26.7 | Connector buildings (base network visualisation) | **DONE** | Medium |
+
+**Implementation notes:**
+
+**C++ (GDExtension):**
+- `GameUnit::get_turbo_build_info(building_type_id)` — Returns turbo build costs/turns for speeds 0/1/2 as Dictionary `{turns_0, cost_0, turns_1, cost_1, turns_2, cost_2}`
+- `GameUnit::can_build_path()` — Returns true if vehicle can build roads/bridges/platforms (`canBuildPath`)
+- `GameUnit::get_connection_flags()` — Returns building connection directions `{BaseN, BaseE, BaseS, BaseW, BaseBN, BaseBE, BaseBS, BaseBW, connects_to_base}`
+- `GameUnit::get_max_build_factor()` — Returns max turbo build factor (0=no turbo, >1=turbo available)
+- `GameActions::start_build_path(vehicle_id, type_id, speed, start, end)` — Start path building from start to end position via `cActionStartBuild` with `pathEndPosition`
+
+**GDScript:**
+- Build panel: shows turbo build costs/turns (1x/2x/4x buttons) per building entry via `get_turbo_build_info()`, emits `building_selected_ex` with speed
+- Build preview: shows real-time cost/time/speed in tile label during placement hover
+- Cancel construction: "CANCEL BUILD" button shown when constructing vehicle selected, calls `actions.stop()` which triggers `cActionStop`
+- Turbo build: speed 0/1/2 selected from build panel, passed to `start_build()` — speeds: 0=1x, 1=2x (4x metal), 2=4x (12x metal)
+- Path building: "PATH BUILD" button on `canBuildPath` vehicles, click-to-set-end triggers `start_build_path()` with `pathEndPosition`
+- Connector overlay: "NET" toggle button draws base connection lines between buildings using `get_connection_flags()`, colour-coded per player
+- `overlay_renderer.gd`: new `_draw_connector_overlay()` draws node highlights and directional connection lines for 1x1 and 2x2 buildings
+- `unit_renderer.gd`: buildings include `connects_to_base` flag in render data
 
 ## Phase 27: End-Game — **MEDIUM PRIORITY**
 

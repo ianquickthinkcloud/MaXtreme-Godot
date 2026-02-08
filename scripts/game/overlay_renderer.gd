@@ -74,6 +74,12 @@ var _stat_overlay_tiles: Array = []
 var _grid_visible := false
 const COLOR_GRID := Color(0.3, 0.35, 0.4, 0.15)
 
+# --- Connector overlay (Phase 26) ---
+# Each entry: {pos: Vector2i, is_big: bool, color: Color, BaseN, BaseE, BaseS, BaseW, ...}
+var _connector_tiles: Array = []
+const COLOR_CONNECTOR_LINE := Color(0.2, 0.8, 1.0, 0.6)
+const COLOR_CONNECTOR_NODE := Color(0.2, 0.8, 1.0, 0.3)
+
 var _time := 0.0
 
 
@@ -174,6 +180,16 @@ func clear_resource_overlay() -> void:
 	queue_redraw()
 
 
+func set_connector_overlay(tiles: Array) -> void:
+	_connector_tiles = tiles
+	queue_redraw()
+
+
+func clear_connector_overlay() -> void:
+	_connector_tiles.clear()
+	queue_redraw()
+
+
 func clear_all() -> void:
 	_reachable_tiles.clear()
 	_reachable_set.clear()
@@ -219,6 +235,8 @@ func _draw() -> void:
 		_draw_resource_overlay()
 	if not _stat_overlay_tiles.is_empty():
 		_draw_stat_overlay()
+	if not _connector_tiles.is_empty():
+		_draw_connector_overlay()
 	if not _reachable_set.is_empty():
 		_draw_movement_range()
 	if not _attack_range_tiles.is_empty():
@@ -501,3 +519,55 @@ func _draw_resource_overlay() -> void:
 							  pos.y * TILE_SIZE + TILE_SIZE / 2.0 + 4)
 		var label_color := Color(1, 1, 1, 0.7)
 		draw_string(font, center, str(value), HORIZONTAL_ALIGNMENT_CENTER, -1, 10, label_color)
+
+
+func _draw_connector_overlay() -> void:
+	## Draw base connector network lines between buildings (Phase 26).
+	## Each tile_info: {pos, is_big, color, BaseN, BaseE, BaseS, BaseW, BaseBN, BaseBE, BaseBS, BaseBW}
+	for tile_info in _connector_tiles:
+		var pos: Vector2i = tile_info.get("pos", Vector2i(0, 0))
+		var is_big: bool = tile_info.get("is_big", false)
+		var color: Color = tile_info.get("color", COLOR_CONNECTOR_LINE)
+		var tile_w := 2 if is_big else 1
+		var tile_h := 2 if is_big else 1
+
+		# Draw node highlight on the building tile(s)
+		var node_rect := Rect2(pos.x * TILE_SIZE, pos.y * TILE_SIZE,
+							   tile_w * TILE_SIZE, tile_h * TILE_SIZE)
+		draw_rect(node_rect, COLOR_CONNECTOR_NODE)
+
+		# Draw connection lines extending from tile edges
+		var center := Vector2(pos.x * TILE_SIZE + tile_w * TILE_SIZE / 2.0,
+							  pos.y * TILE_SIZE + tile_h * TILE_SIZE / 2.0)
+		var half_w: float = tile_w * TILE_SIZE / 2.0
+		var half_h: float = tile_h * TILE_SIZE / 2.0
+		var ext := TILE_SIZE * 0.5  # line extends half a tile beyond edge
+
+		# 1x1 building connections
+		if tile_info.get("BaseN", false):
+			draw_line(Vector2(center.x, center.y - half_h),
+					  Vector2(center.x, center.y - half_h - ext), color, 3.0, true)
+		if tile_info.get("BaseE", false):
+			draw_line(Vector2(center.x + half_w, center.y),
+					  Vector2(center.x + half_w + ext, center.y), color, 3.0, true)
+		if tile_info.get("BaseS", false):
+			draw_line(Vector2(center.x, center.y + half_h),
+					  Vector2(center.x, center.y + half_h + ext), color, 3.0, true)
+		if tile_info.get("BaseW", false):
+			draw_line(Vector2(center.x - half_w, center.y),
+					  Vector2(center.x - half_w - ext, center.y), color, 3.0, true)
+
+		# 2x2 building extra connections
+		if is_big:
+			if tile_info.get("BaseBN", false):
+				draw_line(Vector2(center.x + TILE_SIZE * 0.5, center.y - half_h),
+						  Vector2(center.x + TILE_SIZE * 0.5, center.y - half_h - ext), color, 3.0, true)
+			if tile_info.get("BaseBE", false):
+				draw_line(Vector2(center.x + half_w, center.y + TILE_SIZE * 0.5),
+						  Vector2(center.x + half_w + ext, center.y + TILE_SIZE * 0.5), color, 3.0, true)
+			if tile_info.get("BaseBS", false):
+				draw_line(Vector2(center.x + TILE_SIZE * 0.5, center.y + half_h),
+						  Vector2(center.x + TILE_SIZE * 0.5, center.y + half_h + ext), color, 3.0, true)
+			if tile_info.get("BaseBW", false):
+				draw_line(Vector2(center.x - half_w, center.y + TILE_SIZE * 0.5),
+						  Vector2(center.x - half_w - ext, center.y + TILE_SIZE * 0.5), color, 3.0, true)

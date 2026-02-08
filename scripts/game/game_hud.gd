@@ -22,6 +22,7 @@ signal grid_overlay_toggled(enabled: bool)  ## Phase 25: Grid toggle
 signal fog_overlay_toggled(enabled: bool)  ## Phase 25: Fog toggle
 signal minimap_zoom_toggled()  ## Phase 25: Minimap zoom
 signal minimap_filter_toggled()  ## Phase 25: Minimap attack-only filter
+signal connector_overlay_toggled(enabled: bool)  ## Phase 26: Base network overlay
 
 # References set by code
 var _sprite_cache = null
@@ -384,6 +385,9 @@ func _create_command_buttons() -> void:
 	cmd_grid_3.add_child(_create_cmd_button("upgrade_unit", "UPGRADE", "Upgrade this unit to the latest version"))
 	cmd_grid_3.add_child(_create_cmd_button("upgrade_all", "UPGRADE ALL", "Upgrade all buildings of this type"))
 	cmd_grid_3.add_child(_create_cmd_button("info", "INFO", "Open detailed unit information"))
+	# Phase 26: Path building and cancel build
+	cmd_grid_3.add_child(_create_cmd_button("path_build", "PATH BUILD", "Build road/bridge/platform to a target position"))
+	cmd_grid_3.add_child(_create_cmd_button("cancel_build", "CANCEL BUILD", "Cancel construction in progress"))
 
 
 func _create_cargo_panel() -> void:
@@ -1447,6 +1451,7 @@ func _create_overlay_toolbar() -> void:
 		["LCK", "lock", "Lock overlay: show sentry units"],
 		["GRD", "grid", "Grid overlay: show tile grid"],
 		["FOG", "fog", "Fog of war: toggle visibility"],
+		["NET", "connector", "Network: show base connections"],
 	]
 
 	for ov in overlays:
@@ -1467,6 +1472,8 @@ func _on_overlay_toggled(overlay_name: String, pressed: bool) -> void:
 			grid_overlay_toggled.emit(pressed)
 		"fog":
 			fog_overlay_toggled.emit(pressed)
+		"connector":
+			connector_overlay_toggled.emit(pressed)
 		_:
 			if pressed:
 				_active_stat_overlay = overlay_name
@@ -1962,9 +1969,15 @@ func update_selected_unit(info: Dictionary) -> void:
 			_show_cmd("sentry", "SENTRY ON" if is_sentry else "SENTRY", is_sentry)
 			_show_cmd("manual_fire", "MANUAL ON" if is_mfire else "MANUAL", is_mfire)
 
-		# Stop (if working or moving)
-		if is_working:
+		# Stop (if working or moving) / Cancel Build (if constructing)
+		if info.get("is_constructing", false):
+			_show_cmd("stop", "CANCEL BUILD", false)
+		elif is_working:
 			_show_cmd("stop", "STOP", false)
+
+		# Phase 26: Path building (road/bridge/platform)
+		if info.get("can_build_path", false) and not info.get("is_constructing", false):
+			_show_cmd("path_build", "PATH BUILD", false)
 
 		# Survey (auto-move for surveyors)
 		if caps.get("can_survey", false):

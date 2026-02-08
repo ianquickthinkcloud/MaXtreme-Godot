@@ -89,6 +89,9 @@ public:
     /// Start building a structure. building_type_id is the sID as "firstPart.secondPart" string.
     bool start_build(int vehicle_id, String building_type_id, int build_speed, Vector2i build_pos);
 
+    /// Start building a path (road/bridge/platform) from vehicle position to path_end.
+    bool start_build_path(int vehicle_id, String building_type_id, int build_speed, Vector2i build_pos, Vector2i path_end);
+
     /// Finish a build (vehicle exits to escape position after building completes).
     bool finish_build(int unit_id, Vector2i escape_pos);
 

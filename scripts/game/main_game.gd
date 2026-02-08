@@ -33,7 +33,10 @@ var _build_type_id := ""
 var _build_type_name := ""
 var _build_is_big := false
 var _build_cost := 0
+var _build_speed := 0  # Phase 26: 0=normal, 1=2x, 2=4x turbo
 var _build_constructor_id := -1  # ID of the constructor initiating the build
+var _path_build_mode := false  # Phase 26: True when placing path end position
+var _path_build_start := Vector2i(-1, -1)  # Phase 26: Start of path build
 
 var build_panel = null       # BuildPanel node
 var production_panel = null  # ProductionPanel node
@@ -94,6 +97,7 @@ func _ready() -> void:
 	hud.connect("stat_overlay_changed", _on_stat_overlay_changed)
 	hud.connect("grid_overlay_toggled", _on_grid_overlay_toggled)
 	hud.connect("fog_overlay_toggled", _on_fog_overlay_toggled)
+	hud.connect("connector_overlay_toggled", _on_connector_overlay_toggled)
 
 	# Phase 23: Connect engine event signals
 	engine.connect("unit_attacked", _on_unit_attacked)
@@ -117,7 +121,11 @@ func _ready() -> void:
 	build_panel = hud.get_node_or_null("BuildPanel")
 	if build_panel:
 		build_panel.set_sprite_cache(_sprite_cache)
-		build_panel.connect("building_selected", _on_building_selected)
+		# Phase 26: prefer building_selected_ex with speed parameter
+		if build_panel.has_signal("building_selected_ex"):
+			build_panel.connect("building_selected_ex", _on_building_selected_ex)
+		else:
+			build_panel.connect("building_selected", _on_building_selected)
 		build_panel.connect("panel_closed", _on_build_panel_closed)
 
 	# Set up production panel (child of GameHUD CanvasLayer)
@@ -679,7 +687,13 @@ func _update_selected_unit_hud() -> void:
 			if mining.get("metal", 0) > 0 or mining.get("oil", 0) > 0 or mining.get("gold", 0) > 0:
 				extra_info += "  Mining: M%d O%d G%d" % [mining.get("metal", 0), mining.get("oil", 0), mining.get("gold", 0)]
 		elif unit.is_vehicle() and unit.is_building_a_building():
-			extra_info = "Building... (%d turns left)" % unit.get_build_turns_remaining()
+			var remaining_turns: int = unit.get_build_turns_remaining()
+			var remaining_cost: int = unit.get_build_costs_remaining()
+			var start_cost: int = unit.get_build_costs_start()
+			var progress := 0.0
+			if start_cost > 0:
+				progress = 1.0 - (float(remaining_cost) / float(start_cost))
+			extra_info = "Building... (%d turns, %d metal left, %.0f%%)" % [remaining_turns, remaining_cost, progress * 100.0]
 
 		# Fetch capabilities and state for command buttons
 		var caps = unit.get_capabilities()
@@ -728,6 +742,9 @@ func _update_selected_unit_hud() -> void:
 			"description": unit.get_description(),
 			# Phase 22: Mine building flag
 			"is_mine": unit.is_building() and (unit.get_mining_max().get("metal", 0) > 0 or unit.get_mining_max().get("oil", 0) > 0 or unit.get_mining_max().get("gold", 0) > 0),
+			# Phase 26: Construction state
+			"is_constructing": unit.is_vehicle() and unit.is_building_a_building(),
+			"can_build_path": unit.is_vehicle() and unit.can_build_path() if unit.has_method("can_build_path") else false,
 		})
 	else:
 		hud.clear_selected_unit()
@@ -761,18 +778,27 @@ func _on_build_button_pressed() -> void:
 
 
 func _on_building_selected(type_id: String, type_name: String, is_big: bool, cost: int) -> void:
-	## Called when a building is picked from the build panel
+	## Called when a building is picked from the build panel (legacy signal)
+	_on_building_selected_ex(type_id, type_name, is_big, cost, 0)
+
+
+func _on_building_selected_ex(type_id: String, type_name: String, is_big: bool, cost: int, speed: int) -> void:
+	## Called when a building is picked from the build panel (with turbo speed)
 	_build_mode = true
 	_build_type_id = type_id
 	_build_type_name = type_name
 	_build_is_big = is_big
 	_build_cost = cost
+	_build_speed = speed
 	_build_constructor_id = selected_unit_id
+	_path_build_mode = false
+	_path_build_start = Vector2i(-1, -1)
 	if build_panel:
 		build_panel.close()
 	# Clear movement overlays and show build preview instead
 	overlay.clear_all()
-	print("[Game] Build mode: placing %s (%s, cost: %d)" % [type_name, "2x2" if is_big else "1x1", cost])
+	var speed_label := ["1x", "2x", "4x"][clampi(speed, 0, 2)]
+	print("[Game] Build mode: placing %s (%s, cost: %d, speed: %s)" % [type_name, "2x2" if is_big else "1x1", cost, speed_label])
 
 
 func _on_build_panel_closed() -> void:
@@ -790,6 +816,19 @@ func _update_build_preview(hover_tile: Vector2i) -> void:
 	# Basic validation: check that all tiles are valid ground (not water/blocked)
 	var valid := _is_valid_build_position(hover_tile)
 	overlay.set_build_preview(hover_tile, _build_is_big, valid)
+
+	# Phase 26: Show cost/time info in the tile label
+	var speed_label := ["1x", "2x", "4x"][clampi(_build_speed, 0, 2)]
+	var unit = _find_unit(_build_constructor_id)
+	if unit:
+		var turbo = unit.get_turbo_build_info(_build_type_id)
+		var cost_key := "cost_%d" % _build_speed
+		var turns_key := "turns_%d" % _build_speed
+		var cost_val: int = turbo.get(cost_key, _build_cost)
+		var turns_val: int = turbo.get(turns_key, 0)
+		hud.tile_label.text = "%s  [%d metal, %d turns, %s]" % [_build_type_name, cost_val, turns_val, speed_label]
+	else:
+		hud.tile_label.text = "%s  [%d metal, %s]" % [_build_type_name, _build_cost, speed_label]
 
 
 func _is_valid_build_position(pos: Vector2i) -> bool:
@@ -823,19 +862,25 @@ func _handle_build_click() -> void:
 	if not map_renderer.is_valid_tile(tile):
 		return
 
+	# Phase 26: Path building mode — second click sets end position
+	if _path_build_mode:
+		_handle_path_build_end(tile)
+		return
+
 	if not _is_valid_build_position(tile):
 		print("[Game] Cannot build here - invalid position")
 		return
 
-	# Determine build speed (1 = normal, use 1 for now)
-	var build_speed := 1
+	# Phase 26: Use selected turbo build speed
+	var build_speed := _build_speed
 
 	# Call engine action to start build
 	if actions:
 		var result = actions.start_build(_build_constructor_id, _build_type_id, build_speed, tile)
 		if result:
 			AudioManager.play_sound("build_place")
-			print("[Game] Started building %s at (%d, %d)" % [_build_type_name, tile.x, tile.y])
+			var speed_label := ["1x", "2x", "4x"][clampi(build_speed, 0, 2)]
+			print("[Game] Started building %s at (%d, %d) [speed: %s]" % [_build_type_name, tile.x, tile.y, speed_label])
 			_cancel_build_mode()
 			# Refresh everything
 			_refresh_fog()
@@ -853,7 +898,10 @@ func _cancel_build_mode() -> void:
 	_build_type_name = ""
 	_build_is_big = false
 	_build_cost = 0
+	_build_speed = 0
 	_build_constructor_id = -1
+	_path_build_mode = false
+	_path_build_start = Vector2i(-1, -1)
 	overlay.clear_build_preview()
 	# Restore movement overlays if a unit is selected
 	if selected_unit_id != -1:
@@ -861,6 +909,82 @@ func _cancel_build_mode() -> void:
 	if build_panel:
 		build_panel.close()
 	print("[Game] Build mode cancelled")
+
+
+# --- Phase 26: Path Building (road/bridge/platform) ---
+
+func _cmd_start_path_build() -> void:
+	## Enter path building mode: user picks start (vehicle pos) then end position
+	if selected_unit_id == -1:
+		return
+	var unit = _find_unit(selected_unit_id)
+	if not unit or not unit.can_build_path():
+		print("[Game] This unit cannot build paths")
+		return
+
+	# The constructor must be able to build a road/bridge/platform type
+	var buildable = unit.get_buildable_types()
+	if buildable.is_empty():
+		print("[Game] No buildable types for path building")
+		return
+
+	# Use the first buildable type (usually connector/road)
+	var first_type = buildable[0]
+	_build_mode = true
+	_build_type_id = first_type.get("id", "")
+	_build_type_name = first_type.get("name", "Road/Bridge")
+	_build_is_big = false
+	_build_cost = first_type.get("cost", 0)
+	_build_speed = 0
+	_build_constructor_id = selected_unit_id
+	_path_build_mode = true
+	_path_build_start = unit.get_position()
+
+	if build_panel:
+		build_panel.close()
+	overlay.clear_all()
+	print("[Game] Path build mode: click destination for %s path" % _build_type_name)
+
+
+func _handle_path_build_end(tile: Vector2i) -> void:
+	## Handle the second click in path building mode (sets the path end)
+	if not map_renderer.is_valid_tile(tile):
+		return
+
+	if actions:
+		var result = actions.start_build_path(
+			_build_constructor_id, _build_type_id, _build_speed,
+			_path_build_start, tile
+		)
+		if result:
+			AudioManager.play_sound("build_place")
+			print("[Game] Started path build from (%d,%d) to (%d,%d)" % [
+				_path_build_start.x, _path_build_start.y, tile.x, tile.y])
+			_cancel_build_mode()
+			_refresh_fog()
+			unit_renderer.refresh_units()
+			_update_hud()
+			if selected_unit_id != -1:
+				_update_selected_unit_hud()
+		else:
+			print("[Game] Path build action failed (engine rejected)")
+
+
+# --- Phase 26: Cancel Construction ---
+
+func _cmd_cancel_construction() -> void:
+	## Cancel an in-progress construction (vehicle building a building)
+	if selected_unit_id == -1:
+		return
+	var unit = _find_unit(selected_unit_id)
+	if not unit:
+		return
+	if unit.is_vehicle() and unit.is_building_a_building():
+		if actions.stop(selected_unit_id):
+			print("[Game] Cancelled construction for unit ", selected_unit_id)
+			_refresh_after_action()
+		else:
+			print("[Game] Failed to cancel construction")
 
 
 func _on_factory_selected(unit) -> void:
@@ -1303,6 +1427,11 @@ func _on_command_pressed(command: String) -> void:
 		_cmd_open_bases()
 	elif command == "toggle_resource_overlay":
 		_cmd_toggle_resource_overlay()
+	# --- Phase 26: Construction Enhancements ---
+	elif command == "cancel_build":
+		_cmd_cancel_construction()
+	elif command == "path_build":
+		_cmd_start_path_build()
 	# --- Target-selection actions (enter selection mode) ---
 	elif command == "load":
 		_cmd_enter_mode("load")
@@ -1352,6 +1481,15 @@ func _cmd_stop() -> void:
 		_refresh_after_action()
 	else:
 		print("[Game] Failed to stop unit")
+
+
+func _cmd_cancel_build_from_stop() -> void:
+	## Called from STOP button — if the unit is constructing, cancel it
+	var unit = _find_unit(selected_unit_id)
+	if unit and unit.is_vehicle() and unit.is_building_a_building():
+		_cmd_cancel_construction()
+	else:
+		_cmd_stop()
 
 
 func _cmd_toggle_survey() -> void:
@@ -2066,6 +2204,57 @@ func _on_fog_overlay_toggled(enabled: bool) -> void:
 		fog.queue_redraw()
 
 
+var _connector_overlay_visible := false  # Phase 26: Connector network overlay
+
+func _on_connector_overlay_toggled(enabled: bool) -> void:
+	_connector_overlay_visible = enabled
+	if enabled:
+		_refresh_connector_overlay()
+	else:
+		overlay.clear_connector_overlay()
+
+
+func _refresh_connector_overlay() -> void:
+	## Rebuild the connector network overlay showing building connections.
+	if not _connector_overlay_visible:
+		return
+
+	var tiles: Array = []
+	var player_count: int = engine.get_player_count()
+
+	for pi in range(player_count):
+		var buildings: Array = engine.get_player_buildings(pi)
+		var player_color: Color = unit_renderer.PLAYER_COLORS[pi % unit_renderer.PLAYER_COLORS.size()]
+		var line_color := Color(player_color.r, player_color.g, player_color.b, 0.6)
+
+		for bldg in buildings:
+			if not bldg:
+				continue
+			if not bldg.connects_to_base():
+				continue
+
+			var flags: Dictionary = bldg.get_connection_flags()
+			if flags.is_empty():
+				continue
+
+			var tile_info := {
+				"pos": bldg.get_position(),
+				"is_big": bldg.is_big() if bldg.has_method("is_big") else false,
+				"color": line_color,
+				"BaseN": flags.get("BaseN", false),
+				"BaseE": flags.get("BaseE", false),
+				"BaseS": flags.get("BaseS", false),
+				"BaseW": flags.get("BaseW", false),
+				"BaseBN": flags.get("BaseBN", false),
+				"BaseBE": flags.get("BaseBE", false),
+				"BaseBS": flags.get("BaseBS", false),
+				"BaseBW": flags.get("BaseBW", false),
+			}
+			tiles.append(tile_info)
+
+	overlay.set_connector_overlay(tiles)
+
+
 func _refresh_stat_overlay() -> void:
 	## Rebuild the stat overlay tiles based on the current overlay type.
 	if _current_stat_overlay.is_empty():
@@ -2267,3 +2456,6 @@ func _refresh_after_action() -> void:
 		_update_overlays()
 		_update_selected_unit_hud()
 	_update_hud()
+	# Phase 26: Refresh connector overlay if active
+	if _connector_overlay_visible:
+		_refresh_connector_overlay()

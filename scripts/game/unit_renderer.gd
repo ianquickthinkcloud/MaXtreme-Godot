@@ -149,6 +149,8 @@ func refresh_units() -> void:
 				"is_manual_fire": b.is_manual_fire(),
 				"is_disabled": b.is_disabled(),
 				"stored_units": b.get_stored_units_count(),
+				# Phase 26: Connector flags
+				"connects_to_base": b.connects_to_base() if b.has_method("connects_to_base") else false,
 			})
 
 			# Register tile occupancy (big buildings span 2x2)

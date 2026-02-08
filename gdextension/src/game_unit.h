@@ -197,6 +197,23 @@ public:
 
     /// Returns energy needed by this building
     int get_energy_need() const;
+
+    // ========== PHASE 26: CONSTRUCTION ENHANCEMENTS ==========
+
+    /// For vehicles: returns turbo build info for a building type as Dictionary.
+    /// {turns_0, cost_0, turns_1, cost_1, turns_2, cost_2}
+    /// Speeds: 0=normal, 1=2x, 2=4x. Cost/turns=0 if speed not available.
+    Dictionary get_turbo_build_info(String building_type_id) const;
+
+    /// Returns true if this vehicle can build roads/bridges/platforms (path building).
+    bool can_build_path() const;
+
+    /// For buildings: returns connection flags as Dictionary.
+    /// {BaseN, BaseE, BaseS, BaseW, BaseBN, BaseBE, BaseBS, BaseBW, connects_to_base}
+    Dictionary get_connection_flags() const;
+
+    /// Returns max build factor (0 = no turbo, >1 means turbo build is available)
+    int get_max_build_factor() const;
 };
 
 } // namespace godot
