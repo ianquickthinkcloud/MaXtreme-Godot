@@ -13,6 +13,7 @@ signal build_pressed
 signal command_pressed(command: String)  ## Generic command button signal
 signal research_allocation_changed(areas: Array)  ## Phase 21: Player changed research allocation
 signal gold_upgrade_requested(id_first: int, id_second: int, stat_index: int)  ## Phase 21: Gold upgrade purchase
+signal mining_distribution_changed(unit_id: int, metal: int, oil: int, gold: int)  ## Phase 22: Mining reallocation
 
 # References set by code
 var _sprite_cache = null
@@ -89,6 +90,19 @@ var _upgrades_data: Array = []  # Cached data from get_upgradeable_units()
 var _research_notification_label: Label = null
 var _research_notification_timer: float = 0.0
 
+# --- Phase 22: Mining & Economy ---
+var _mining_dialog: Window = null
+var _mining_sliders: Array = []  # [{slider, label, max_label}] for metal/oil/gold
+var _mining_total_label: Label = null
+var _mining_apply_button: Button = null
+var _mining_unit_id: int = -1
+
+var _energy_warning_label: Label = null
+var _energy_warning_timer: float = 0.0
+
+var _subbase_panel: Window = null
+var _subbase_list: VBoxContainer = null
+
 
 func _ready() -> void:
 	end_turn_button.pressed.connect(func(): end_turn_pressed.emit())
@@ -104,6 +118,9 @@ func _ready() -> void:
 	_create_research_panel()
 	_create_upgrades_panel()
 	_create_research_notification()
+	_create_mining_dialog()
+	_create_energy_warning()
+	_create_subbase_panel()
 
 
 func set_sprite_cache(cache) -> void:
@@ -131,6 +148,24 @@ func _create_global_buttons() -> void:
 	upgrades_btn.pressed.connect(func(): command_pressed.emit("open_upgrades"))
 	bottom_bar.add_child(upgrades_btn)
 	bottom_bar.move_child(upgrades_btn, 1)
+
+	var bases_btn := Button.new()
+	bases_btn.text = "BASES"
+	bases_btn.custom_minimum_size = Vector2(80, 36)
+	bases_btn.add_theme_font_size_override("font_size", 12)
+	bases_btn.tooltip_text = "View sub-base overview"
+	bases_btn.pressed.connect(func(): command_pressed.emit("open_bases"))
+	bottom_bar.add_child(bases_btn)
+	bottom_bar.move_child(bases_btn, 2)
+
+	var res_overlay_btn := Button.new()
+	res_overlay_btn.text = "RESOURCES"
+	res_overlay_btn.custom_minimum_size = Vector2(100, 36)
+	res_overlay_btn.add_theme_font_size_override("font_size", 12)
+	res_overlay_btn.tooltip_text = "Toggle resource deposit overlay on map"
+	res_overlay_btn.pressed.connect(func(): command_pressed.emit("toggle_resource_overlay"))
+	bottom_bar.add_child(res_overlay_btn)
+	bottom_bar.move_child(res_overlay_btn, 3)
 
 
 # =============================================================================
@@ -297,6 +332,8 @@ func _create_command_buttons() -> void:
 	cmd_grid_3.add_child(_create_cmd_button("transfer", "TRANSFER", "Transfer resources"))
 	cmd_grid_3.add_child(_create_cmd_button("rename", "RENAME", "Rename this unit"))
 	cmd_grid_3.add_child(_create_cmd_button("self_destroy", "DESTROY", "Self-destruct this building"))
+	cmd_grid_3.add_child(_create_cmd_button("survey", "SURVEY", "Toggle auto-survey mode for surveyors"))
+	cmd_grid_3.add_child(_create_cmd_button("mining", "MINING", "Adjust mining resource allocation"))
 	cmd_grid_3.add_child(_create_cmd_button("upgrade_unit", "UPGRADE", "Upgrade this unit to the latest version"))
 	cmd_grid_3.add_child(_create_cmd_button("upgrade_all", "UPGRADE ALL", "Upgrade all buildings of this type"))
 	cmd_grid_3.add_child(_create_cmd_button("info", "INFO", "Open detailed unit information"))
@@ -753,7 +790,27 @@ func show_research_notification(area_name: String, new_level: int) -> void:
 	if not _research_notification_label:
 		return
 	_research_notification_label.text = "%s Research reached Level %d!" % [area_name, new_level]
+	_research_notification_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
 	_research_notification_label.visible = true
+	_research_notification_label.modulate.a = 1.0
+	_research_notification_timer = 3.0
+
+
+func show_resource_discovery(resource_type: String, value: int, pos: Vector2i) -> void:
+	## Show a brief toast that resources were discovered at a location.
+	if not _research_notification_label:
+		return
+	var color: Color
+	match resource_type:
+		"metal": color = Color(0.55, 0.65, 0.85)
+		"oil":   color = Color(0.5, 0.5, 0.5)
+		"gold":  color = Color(0.95, 0.85, 0.3)
+		_:       color = Color(0.7, 0.8, 0.9)
+	_research_notification_label.text = "%s deposit found (%d) at (%d, %d)!" % [
+		resource_type.capitalize(), value, pos.x, pos.y]
+	_research_notification_label.add_theme_color_override("font_color", color)
+	_research_notification_label.visible = true
+	_research_notification_label.modulate.a = 1.0
 	_research_notification_timer = 3.0
 
 
@@ -770,6 +827,299 @@ func _process_notification(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_process_notification(delta)
+	_process_energy_warning(delta)
+
+
+# =============================================================================
+# PHASE 22: MINING ALLOCATION DIALOG
+# =============================================================================
+
+func _create_mining_dialog() -> void:
+	_mining_dialog = Window.new()
+	_mining_dialog.title = "Mining Allocation"
+	_mining_dialog.size = Vector2i(380, 320)
+	_mining_dialog.visible = false
+	_mining_dialog.transient = true
+	add_child(_mining_dialog)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	_mining_dialog.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(vbox)
+
+	var res_names := ["Metal", "Oil", "Gold"]
+	var res_colors := [Color(0.7, 0.75, 0.85), Color(0.3, 0.3, 0.3), Color(0.95, 0.85, 0.3)]
+	_mining_sliders = []
+
+	for i in range(3):
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 2)
+		vbox.add_child(row)
+
+		var label_row := HBoxContainer.new()
+		row.add_child(label_row)
+
+		var name_lbl := Label.new()
+		name_lbl.text = res_names[i] + ":"
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_color_override("font_color", res_colors[i])
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label_row.add_child(name_lbl)
+
+		var val_lbl := Label.new()
+		val_lbl.text = "0"
+		val_lbl.add_theme_font_size_override("font_size", 14)
+		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		val_lbl.custom_minimum_size = Vector2(40, 0)
+		label_row.add_child(val_lbl)
+
+		var max_lbl := Label.new()
+		max_lbl.text = "/ 0"
+		max_lbl.add_theme_font_size_override("font_size", 12)
+		max_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.6))
+		label_row.add_child(max_lbl)
+
+		var slider := HSlider.new()
+		slider.min_value = 0
+		slider.max_value = 16
+		slider.step = 1
+		slider.value = 0
+		slider.custom_minimum_size = Vector2(280, 20)
+		var idx := i
+		slider.value_changed.connect(func(_v: float): _on_mining_slider_changed(idx))
+		row.add_child(slider)
+
+		_mining_sliders.append({"slider": slider, "label": val_lbl, "max_label": max_lbl})
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+
+	_mining_total_label = Label.new()
+	_mining_total_label.text = "Total: 0 / 0"
+	_mining_total_label.add_theme_font_size_override("font_size", 13)
+	_mining_total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_mining_total_label)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(btn_row)
+
+	_mining_apply_button = Button.new()
+	_mining_apply_button.text = "Apply"
+	_mining_apply_button.custom_minimum_size = Vector2(90, 32)
+	_mining_apply_button.pressed.connect(_on_mining_apply)
+	btn_row.add_child(_mining_apply_button)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(90, 32)
+	close_btn.pressed.connect(func(): _mining_dialog.visible = false)
+	btn_row.add_child(close_btn)
+
+	_mining_dialog.close_requested.connect(func(): _mining_dialog.visible = false)
+
+
+func _on_mining_slider_changed(_idx: int) -> void:
+	## Update labels and total when mining sliders change.
+	var total := 0
+	for s in _mining_sliders:
+		var v: int = int(s["slider"].value)
+		s["label"].text = str(v)
+		total += v
+	var max_total: int = int(_mining_total_label.get_meta("max_total", 16))
+	_mining_total_label.text = "Total: %d / %d" % [total, max_total]
+	if total > max_total:
+		_mining_total_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3))
+		_mining_apply_button.disabled = true
+	else:
+		_mining_total_label.add_theme_color_override("font_color", Color(0.7, 0.85, 0.75))
+		_mining_apply_button.disabled = false
+
+
+func _on_mining_apply() -> void:
+	var m: int = int(_mining_sliders[0]["slider"].value)
+	var o: int = int(_mining_sliders[1]["slider"].value)
+	var g: int = int(_mining_sliders[2]["slider"].value)
+	mining_distribution_changed.emit(_mining_unit_id, m, o, g)
+	_mining_dialog.visible = false
+
+
+func show_mining_dialog(unit_id: int, current: Dictionary, max_prod: Dictionary, max_total: int) -> void:
+	## Open the mining allocation dialog for a mine building.
+	if not _mining_dialog:
+		return
+	_mining_unit_id = unit_id
+
+	var keys := ["metal", "oil", "gold"]
+	for i in range(3):
+		var cur: int = current.get(keys[i], 0)
+		var mx: int = max_prod.get(keys[i], 0)
+		_mining_sliders[i]["slider"].max_value = mx
+		_mining_sliders[i]["slider"].value = cur
+		_mining_sliders[i]["label"].text = str(cur)
+		_mining_sliders[i]["max_label"].text = "/ %d" % mx
+
+	_mining_total_label.set_meta("max_total", max_total)
+	_on_mining_slider_changed(0)
+	_mining_dialog.popup_centered()
+
+
+# =============================================================================
+# PHASE 22: ENERGY SHORTAGE WARNING
+# =============================================================================
+
+func _create_energy_warning() -> void:
+	_energy_warning_label = Label.new()
+	_energy_warning_label.text = ""
+	_energy_warning_label.visible = false
+	_energy_warning_label.add_theme_font_size_override("font_size", 16)
+	_energy_warning_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.2))
+	_energy_warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_energy_warning_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_energy_warning_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_energy_warning_label.offset_top = 90
+	_energy_warning_label.offset_left = -250
+	_energy_warning_label.offset_right = 250
+	_energy_warning_label.offset_bottom = 120
+	add_child(_energy_warning_label)
+
+
+func show_energy_warning(message: String) -> void:
+	if not _energy_warning_label:
+		return
+	_energy_warning_label.text = message
+	_energy_warning_label.visible = true
+	_energy_warning_label.modulate.a = 1.0
+	_energy_warning_timer = 4.0
+
+
+func _process_energy_warning(delta: float) -> void:
+	if _energy_warning_timer > 0:
+		_energy_warning_timer -= delta
+		if _energy_warning_timer <= 0 and _energy_warning_label:
+			_energy_warning_label.visible = false
+		elif _energy_warning_timer < 1.5 and _energy_warning_label:
+			_energy_warning_label.modulate.a = _energy_warning_timer / 1.5
+
+
+# =============================================================================
+# PHASE 22: SUB-BASE PANEL
+# =============================================================================
+
+func _create_subbase_panel() -> void:
+	_subbase_panel = Window.new()
+	_subbase_panel.title = "Sub-Base Overview"
+	_subbase_panel.size = Vector2i(500, 450)
+	_subbase_panel.visible = false
+	_subbase_panel.transient = true
+	add_child(_subbase_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_subbase_panel.add_child(margin)
+
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(main_vbox)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(scroll)
+
+	_subbase_list = VBoxContainer.new()
+	_subbase_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_subbase_list.add_theme_constant_override("separation", 8)
+	scroll.add_child(_subbase_list)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(100, 32)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): _subbase_panel.visible = false)
+	main_vbox.add_child(close_btn)
+
+	_subbase_panel.close_requested.connect(func(): _subbase_panel.visible = false)
+
+
+func show_subbase_panel(sub_bases: Array) -> void:
+	## Populate and show the sub-base overview.
+	if not _subbase_panel:
+		return
+
+	for child in _subbase_list.get_children():
+		child.queue_free()
+
+	for i in range(sub_bases.size()):
+		var sb: Dictionary = sub_bases[i]
+		var frame := PanelContainer.new()
+		_subbase_list.add_child(frame)
+
+		var vbox := VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 3)
+		frame.add_child(vbox)
+
+		# Header
+		var header := Label.new()
+		header.text = "Sub-Base %d  (%d buildings)" % [i + 1, sb.get("building_count", 0)]
+		header.add_theme_font_size_override("font_size", 14)
+		header.add_theme_color_override("font_color", Color(0.3, 0.85, 1.0))
+		vbox.add_child(header)
+
+		# Resources
+		var res_lbl := Label.new()
+		res_lbl.text = "Storage:  Metal %d/%d  |  Oil %d/%d  |  Gold %d/%d" % [
+			sb.get("metal", 0), sb.get("metal_max", 0),
+			sb.get("oil", 0), sb.get("oil_max", 0),
+			sb.get("gold", 0), sb.get("gold_max", 0)]
+		res_lbl.add_theme_font_size_override("font_size", 12)
+		vbox.add_child(res_lbl)
+
+		# Production
+		var prod_lbl := Label.new()
+		var pm: int = sb.get("production_metal", 0) - sb.get("needed_metal", 0)
+		var po: int = sb.get("production_oil", 0) - sb.get("needed_oil", 0)
+		var pg: int = sb.get("production_gold", 0) - sb.get("needed_gold", 0)
+		prod_lbl.text = "Net:  M %s%d  |  O %s%d  |  G %s%d" % [
+			"+" if pm >= 0 else "", pm,
+			"+" if po >= 0 else "", po,
+			"+" if pg >= 0 else "", pg]
+		prod_lbl.add_theme_font_size_override("font_size", 12)
+		prod_lbl.add_theme_color_override("font_color",
+			Color(0.7, 0.85, 0.75) if pm >= 0 and po >= 0 else Color(1.0, 0.6, 0.4))
+		vbox.add_child(prod_lbl)
+
+		# Energy
+		var e_prod: int = sb.get("energy_prod", 0)
+		var e_need: int = sb.get("energy_need", 0)
+		var e_net: int = e_prod - e_need
+		var energy_lbl := Label.new()
+		energy_lbl.text = "Energy: %d / %d  (%s%d)" % [e_prod, e_need, "+" if e_net >= 0 else "", e_net]
+		energy_lbl.add_theme_font_size_override("font_size", 12)
+		energy_lbl.add_theme_color_override("font_color",
+			Color(0.3, 0.85, 1.0) if e_net >= 0 else Color(1.0, 0.35, 0.3))
+		vbox.add_child(energy_lbl)
+
+		# Humans
+		var h_prod: int = sb.get("human_prod", 0)
+		var h_need: int = sb.get("human_need", 0)
+		var human_lbl := Label.new()
+		human_lbl.text = "Humans: %d / %d" % [h_prod, h_need]
+		human_lbl.add_theme_font_size_override("font_size", 12)
+		vbox.add_child(human_lbl)
+
+	_subbase_panel.popup_centered()
 
 
 # =============================================================================
@@ -1098,6 +1448,14 @@ func update_selected_unit(info: Dictionary) -> void:
 		# Resources: transfer
 		if caps.get("can_store_resources", false) and info.get("stored_resources", 0) > 0:
 			_show_cmd("transfer", "TRANSFER", false)
+
+		# Survey (for surveyor vehicles)
+		if not is_bldg and caps.get("can_survey", false):
+			_show_cmd("survey", "SURVEY", false)
+
+		# Mining allocation (for mine buildings)
+		if is_bldg and info.get("is_mine", false):
+			_show_cmd("mining", "MINING", false)
 
 		# Self-destruct (buildings only)
 		if is_bldg and caps.get("can_self_destroy", false):

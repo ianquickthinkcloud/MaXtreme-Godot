@@ -58,6 +58,10 @@ void GamePlayer::_bind_methods() {
     // Economy summary
     ClassDB::bind_method(D_METHOD("get_economy_summary"), &GamePlayer::get_economy_summary);
 
+    // Resource survey & sub-bases (Phase 22)
+    ClassDB::bind_method(D_METHOD("has_resource_explored", "pos"), &GamePlayer::has_resource_explored);
+    ClassDB::bind_method(D_METHOD("get_sub_bases"), &GamePlayer::get_sub_bases);
+
     // Fog of War / Visibility (Phase 14)
     ClassDB::bind_method(D_METHOD("can_see_at", "pos"), &GamePlayer::can_see_at);
     ClassDB::bind_method(D_METHOD("get_scan_map_data"), &GamePlayer::get_scan_map_data);
@@ -367,6 +371,58 @@ Dictionary GamePlayer::get_economy_summary() const {
     result["energy"] = get_energy_balance();
     result["humans"] = get_human_balance();
     result["research"] = get_research_levels();
+    return result;
+}
+
+// ========== RESOURCE SURVEY & SUB-BASES (Phase 22) ==========
+
+bool GamePlayer::has_resource_explored(Vector2i pos) const {
+    if (!player) return false;
+    return player->hasResourceExplored(cPosition(pos.x, pos.y));
+}
+
+Array GamePlayer::get_sub_bases() const {
+    Array result;
+    if (!player) return result;
+
+    for (const auto& sb : player->base.SubBases) {
+        Dictionary info;
+        const auto& stored = sb->getResourcesStored();
+        const auto& maxStored = sb->getMaxResourcesStored();
+        info["metal"] = stored.metal;
+        info["oil"] = stored.oil;
+        info["gold"] = stored.gold;
+        info["metal_max"] = maxStored.metal;
+        info["oil_max"] = maxStored.oil;
+        info["gold_max"] = maxStored.gold;
+
+        const auto& prod = sb->getProd();
+        info["production_metal"] = prod.metal;
+        info["production_oil"] = prod.oil;
+        info["production_gold"] = prod.gold;
+
+        const auto& needed = sb->getResourcesNeeded();
+        info["needed_metal"] = needed.metal;
+        info["needed_oil"] = needed.oil;
+        info["needed_gold"] = needed.gold;
+
+        info["energy_prod"] = sb->getEnergyProd();
+        info["energy_need"] = sb->getEnergyNeed();
+        info["energy_max_prod"] = sb->getMaxEnergyProd();
+        info["energy_max_need"] = sb->getMaxEnergyNeed();
+        info["human_prod"] = sb->getHumanProd();
+        info["human_need"] = sb->getHumanNeed();
+
+        // Building IDs in this sub-base
+        Array bldg_ids;
+        for (const auto* bldg : sb->getBuildings()) {
+            bldg_ids.push_back(static_cast<int>(bldg->getId()));
+        }
+        info["building_count"] = bldg_ids.size();
+        info["buildings"] = bldg_ids;
+
+        result.push_back(info);
+    }
     return result;
 }
 

@@ -561,16 +561,30 @@ positions along the horizontal center of the map. Players have no choice.
 - Research notification toast on level-up
 - Pre-game upgrade tab on choose_units.gd with toggle, stat display, and credit tracking
 
-## Phase 22: Mining, Resources & Economy — **HIGH PRIORITY**
+## Phase 22: Mining, Resources & Economy — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 22.1 | Mining allocation menu (`Title~Mine`) | **EXPOSED** | Medium |
-| 22.2 | Resource survey action (surveyor units) | **MISSING** | Medium |
-| 22.3 | Resource overlay on map (toggleable, colour-coded) | **MISSING** | Medium |
-| 22.4 | Resource discovery notification | **MISSING** | Small |
-| 22.5 | Energy shortage warning | **MISSING** | Small |
-| 22.6 | Sub-base connectivity display | **MISSING** | Large |
+| 22.1 | Mining allocation menu (`Title~Mine`) | **DONE** | Medium |
+| 22.2 | Resource survey action (surveyor units) | **DONE** | Medium |
+| 22.3 | Resource overlay on map (toggleable, colour-coded) | **DONE** | Medium |
+| 22.4 | Resource discovery notification | **DONE** | Small |
+| 22.5 | Energy shortage warning | **DONE** | Small |
+| 22.6 | Sub-base connectivity display | **DONE** | Large |
+
+**Implementation notes:**
+
+**C++ (GDExtension):**
+- `GamePlayer::has_resource_explored(pos)` — check if tile surveyed by player
+- `GamePlayer::get_sub_bases()` — per-sub-base Array of Dicts with storage, production, energy, humans, building IDs
+
+**GDScript:**
+- Mining dialog: slider-based allocation (Metal/Oil/Gold) with max total enforcement, fires `mining_distribution_changed` signal → `GameActions.set_resource_distribution()`
+- Survey command: "SURVEY" button on surveyors toggles auto-survey via `set_auto_move()`
+- Resource overlay: "RESOURCES" toggle in bottom bar renders colour-coded deposits (blue=metal, dark=oil, yellow=gold) with density alpha scaling and value labels on surveyed tiles
+- Resource discovery toast: notification shown when new resource deposits are found after surveyor movement
+- Energy warning: on turn start, checks energy balance and shows orange/red warning toast if `need > production`
+- Sub-base panel: "BASES" button opens scrollable panel showing each sub-base's storage, net production, energy balance, and human counts
 
 ## Phase 23: Notifications & Event Log — **MEDIUM PRIORITY**
 

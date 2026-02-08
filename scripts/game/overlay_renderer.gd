@@ -39,6 +39,11 @@ const COLOR_BUILD_INVALID := Color(0.90, 0.20, 0.15, 0.25)
 const COLOR_BUILD_BORDER_VALID := Color(0.25, 0.90, 0.35, 0.6)
 const COLOR_BUILD_BORDER_INVALID := Color(0.95, 0.25, 0.15, 0.6)
 
+# Resource overlay colors (Phase 22)
+const COLOR_RES_METAL := Color(0.55, 0.65, 0.85, 0.4)
+const COLOR_RES_OIL := Color(0.15, 0.15, 0.15, 0.45)
+const COLOR_RES_GOLD := Color(0.95, 0.80, 0.15, 0.35)
+
 # --- Movement range data ---
 var _reachable_tiles: Array = []
 var _reachable_set: Dictionary = {}  # "x,y" -> cost
@@ -59,6 +64,9 @@ var _attack_preview: Dictionary = {}
 var _build_preview_pos := Vector2i(-1, -1)
 var _build_preview_is_big := false
 var _build_preview_valid := false
+
+# --- Resource overlay (Phase 22) ---
+var _resource_tiles: Array = []
 
 var _time := 0.0
 
@@ -129,6 +137,17 @@ func clear_build_preview() -> void:
 	queue_redraw()
 
 
+func set_resource_overlay(tiles: Array) -> void:
+	## Set resource overlay data. tiles: Array of {pos: Vector2i, type: String, value: int}
+	_resource_tiles = tiles
+	queue_redraw()
+
+
+func clear_resource_overlay() -> void:
+	_resource_tiles.clear()
+	queue_redraw()
+
+
 func clear_all() -> void:
 	_reachable_tiles.clear()
 	_reachable_set.clear()
@@ -138,6 +157,7 @@ func clear_all() -> void:
 	_attackable_set.clear()
 	_attack_preview.clear()
 	_build_preview_pos = Vector2i(-1, -1)
+	# Note: resource overlay is NOT cleared by clear_all (it's a persistent toggle)
 	queue_redraw()
 
 
@@ -167,6 +187,8 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if not _resource_tiles.is_empty():
+		_draw_resource_overlay()
 	if not _reachable_set.is_empty():
 		_draw_movement_range()
 	if not _attack_range_tiles.is_empty():
@@ -378,3 +400,31 @@ func _draw_build_preview() -> void:
 	var label_pos := Vector2(px + (TILE_SIZE * size) / 2.0, py - 8)
 	draw_string(font, label_pos + Vector2(1, 1), label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 12, Color(0, 0, 0, 0.5))
 	draw_string(font, label_pos, label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 12, label_color)
+
+
+func _draw_resource_overlay() -> void:
+	## Draw colour-coded resource deposits on surveyed tiles (Phase 22).
+	var font := ThemeDB.fallback_font
+	for tile_info in _resource_tiles:
+		var pos: Vector2i = tile_info.get("pos", Vector2i(0, 0))
+		var res_type: String = tile_info.get("type", "none")
+		var value: int = tile_info.get("value", 0)
+
+		var rect := Rect2(pos.x * TILE_SIZE, pos.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+		var color: Color
+		match res_type:
+			"metal": color = COLOR_RES_METAL
+			"oil":   color = COLOR_RES_OIL
+			"gold":  color = COLOR_RES_GOLD
+			_: continue
+
+		# Scale alpha by resource density (value 1-16)
+		var density := clampf(float(value) / 16.0, 0.3, 1.0)
+		color.a *= density
+		draw_rect(rect, color)
+
+		# Draw value label
+		var center := Vector2(pos.x * TILE_SIZE + TILE_SIZE / 2.0,
+							  pos.y * TILE_SIZE + TILE_SIZE / 2.0 + 4)
+		var label_color := Color(1, 1, 1, 0.7)
+		draw_string(font, center, str(value), HORIZONTAL_ALIGNMENT_CENTER, -1, 10, label_color)

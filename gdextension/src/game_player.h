@@ -105,6 +105,21 @@ public:
     /// Convenience: all economy info in one dictionary
     Dictionary get_economy_summary() const;
 
+    // ========== RESOURCE SURVEY & SUB-BASES (Phase 22) ==========
+
+    /// Returns true if this player has surveyed the given tile position
+    /// (i.e. a surveyor has explored the resources there).
+    bool has_resource_explored(Vector2i pos) const;
+
+    /// Returns Array of Dictionaries, one per sub-base. Each dict:
+    /// {metal, oil, gold, metal_max, oil_max, gold_max,
+    ///  production_metal, production_oil, production_gold,
+    ///  needed_metal, needed_oil, needed_gold,
+    ///  energy_prod, energy_need, energy_max_prod, energy_max_need,
+    ///  human_prod, human_need, building_count,
+    ///  buildings: Array of building IDs (ints)}
+    Array get_sub_bases() const;
+
     // ========== FOG OF WAR / VISIBILITY (Phase 14) ==========
 
     /// Returns true if the player can currently see the given tile position

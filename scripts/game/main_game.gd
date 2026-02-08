@@ -52,6 +52,9 @@ var _turn_transition_sublabel: Label = null
 var _turn_transition_button: Button = null
 var _sprite_cache_ref = null # Keep a reference to the shared sprite cache
 var _prev_research_levels: Dictionary = {}  # Phase 21: Track previous research levels for notifications
+var _resource_overlay_visible := false  # Phase 22: Toggle for resource overlay
+var _prev_energy_balance: Dictionary = {}  # Phase 22: Track energy for warnings
+var _surveyed_tile_count: int = 0  # Phase 22: Track surveyed tiles for discovery notifications
 
 
 func _ready() -> void:
@@ -81,6 +84,7 @@ func _ready() -> void:
 	hud.connect("command_pressed", _on_command_pressed)
 	hud.connect("research_allocation_changed", _on_research_allocation_changed)
 	hud.connect("gold_upgrade_requested", _on_gold_upgrade_requested)
+	hud.connect("mining_distribution_changed", _on_mining_distribution_changed)
 	move_animator.connect("animation_finished", _on_move_animation_finished)
 	move_animator.connect("direction_changed", _on_unit_direction_changed)
 	combat_fx.connect("effect_sequence_finished", _on_attack_animation_finished)
@@ -676,6 +680,8 @@ func _update_selected_unit_hud() -> void:
 			"scan": unit.get_scan(),
 			"owner_id": unit.get_owner_id(),
 			"description": unit.get_description(),
+			# Phase 22: Mine building flag
+			"is_mine": unit.is_building() and (unit.get_mining_max().get("metal", 0) > 0 or unit.get_mining_max().get("oil", 0) > 0 or unit.get_mining_max().get("gold", 0) > 0),
 		})
 	else:
 		hud.clear_selected_unit()
@@ -866,6 +872,11 @@ func _on_turn_started(turn: int) -> void:
 	_update_hud()
 	# Phase 21: Check for research level-ups
 	_check_research_notifications()
+	# Phase 22: Check energy warnings + refresh resource overlay
+	_check_energy_warnings()
+	_check_resource_discoveries()
+	if _resource_overlay_visible:
+		_refresh_resource_overlay()
 
 
 func _on_turn_ended() -> void:
@@ -1210,6 +1221,15 @@ func _on_command_pressed(command: String) -> void:
 		_cmd_upgrade_unit()
 	elif command == "upgrade_all":
 		_cmd_upgrade_all()
+	# --- Phase 22: Mining & Economy ---
+	elif command == "survey":
+		_cmd_toggle_survey()
+	elif command == "mining":
+		_cmd_open_mining()
+	elif command == "open_bases":
+		_cmd_open_bases()
+	elif command == "toggle_resource_overlay":
+		_cmd_toggle_resource_overlay()
 	# --- Target-selection actions (enter selection mode) ---
 	elif command == "load":
 		_cmd_enter_mode("load")
@@ -1620,6 +1640,140 @@ func _cmd_upgrade_all() -> void:
 		_refresh_after_action()
 	else:
 		print("[Game] Failed to upgrade all buildings")
+
+
+# =============================================================================
+# PHASE 22: MINING, RESOURCES & ECONOMY
+# =============================================================================
+
+func _cmd_toggle_survey() -> void:
+	## Toggle auto-survey mode for the selected surveyor vehicle.
+	if selected_unit_id == -1:
+		return
+	var unit = _find_unit(selected_unit_id)
+	if not unit or unit.is_building():
+		return
+	var caps: Dictionary = unit.get_capabilities()
+	if not caps.get("can_survey", false):
+		return
+	# Toggle auto-move (surveyor auto-move = auto-survey)
+	if actions.set_auto_move(selected_unit_id, true):
+		print("[Game] Auto-survey enabled for unit %d" % selected_unit_id)
+	else:
+		print("[Game] Failed to toggle auto-survey")
+	_refresh_after_action()
+
+
+func _cmd_open_mining() -> void:
+	## Open the mining allocation dialog for the selected mine building.
+	if selected_unit_id == -1:
+		return
+	var unit = _find_unit(selected_unit_id)
+	if not unit or not unit.is_building():
+		return
+	var current: Dictionary = unit.get_mining_production()
+	var max_prod: Dictionary = unit.get_mining_max()
+	var max_total: int = max_prod.get("metal", 0) + max_prod.get("oil", 0) + max_prod.get("gold", 0)
+	if max_total <= 0:
+		print("[Game] This building has no mining capacity")
+		return
+	hud.show_mining_dialog(selected_unit_id, current, max_prod, max_total)
+
+
+func _on_mining_distribution_changed(unit_id: int, metal: int, oil: int, gold: int) -> void:
+	## Apply new mining distribution from the dialog.
+	if not actions:
+		return
+	if actions.set_resource_distribution(unit_id, metal, oil, gold):
+		print("[Game] Mining allocation updated for %d: M=%d O=%d G=%d" % [unit_id, metal, oil, gold])
+		_refresh_after_action()
+	else:
+		print("[Game] Failed to set mining distribution")
+
+
+func _cmd_open_bases() -> void:
+	## Open the sub-base overview panel.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var sub_bases: Array = player.get_sub_bases()
+	hud.show_subbase_panel(sub_bases)
+
+
+func _cmd_toggle_resource_overlay() -> void:
+	## Toggle the resource overlay on the map.
+	_resource_overlay_visible = not _resource_overlay_visible
+	if _resource_overlay_visible:
+		_refresh_resource_overlay()
+	else:
+		overlay.clear_resource_overlay()
+	print("[Game] Resource overlay: ", "ON" if _resource_overlay_visible else "OFF")
+
+
+func _refresh_resource_overlay() -> void:
+	## Refresh the resource overlay from survey data.
+	if not _resource_overlay_visible:
+		return
+	var player = engine.get_player(current_player)
+	var game_map = engine.get_map()
+	if not player or not game_map:
+		return
+	var map_size: Vector2i = game_map.get_size()
+	var resource_tiles: Array = []
+	for y in range(map_size.y):
+		for x in range(map_size.x):
+			var pos := Vector2i(x, y)
+			if player.has_resource_explored(pos):
+				var res: Dictionary = game_map.get_resource_at(pos)
+				var res_type: String = res.get("type", "none")
+				if res_type != "none" and res.get("value", 0) > 0:
+					resource_tiles.append({
+						"pos": pos,
+						"type": res_type,
+						"value": res.get("value", 0)
+					})
+	overlay.set_resource_overlay(resource_tiles)
+
+
+func _check_resource_discoveries() -> void:
+	## Check if any new resource tiles were discovered since last check.
+	## This is a lightweight check—count surveyed tiles and notify if increased.
+	var player = engine.get_player(current_player)
+	var game_map = engine.get_map()
+	if not player or not game_map:
+		return
+	var map_size: Vector2i = game_map.get_size()
+	var count := 0
+	var latest_resource: Dictionary = {}
+	for y in range(map_size.y):
+		for x in range(map_size.x):
+			var pos := Vector2i(x, y)
+			if player.has_resource_explored(pos):
+				count += 1
+				var res: Dictionary = game_map.get_resource_at(pos)
+				if res.get("type", "none") != "none" and res.get("value", 0) > 0:
+					latest_resource = {"type": res.get("type"), "value": res.get("value"), "pos": pos}
+
+	if count > _surveyed_tile_count and _surveyed_tile_count > 0 and not latest_resource.is_empty():
+		hud.show_resource_discovery(
+			latest_resource.get("type", "unknown"),
+			latest_resource.get("value", 0),
+			latest_resource.get("pos", Vector2i(0, 0)))
+	_surveyed_tile_count = count
+
+
+func _check_energy_warnings() -> void:
+	## Check if energy is insufficient and show a warning.
+	var player = engine.get_player(current_player)
+	if not player:
+		return
+	var energy: Dictionary = player.get_energy_balance()
+	var prod: int = energy.get("production", 0)
+	var need: int = energy.get("need", 0)
+	if need > prod and prod > 0:
+		hud.show_energy_warning("Energy shortage! %d / %d — buildings may shut down!" % [prod, need])
+	elif need > 0 and prod <= 0:
+		hud.show_energy_warning("CRITICAL: No energy production! All powered buildings offline!")
 
 
 func _check_research_notifications() -> void:
