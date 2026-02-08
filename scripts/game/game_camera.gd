@@ -10,6 +10,9 @@ const EDGE_SCROLL_MARGIN := 20  # pixels from edge to trigger scroll
 var _dragging := false
 var _drag_start := Vector2.ZERO
 
+# Phase 29: Saved camera positions (4 slots: F5-F8)
+var _saved_positions: Array = [null, null, null, null]  # Array of Vector2 or null
+
 func _ready() -> void:
 	zoom = Vector2(1.5, 1.5)
 	position_smoothing_enabled = true
@@ -83,3 +86,21 @@ func _zoom_at(mouse_pos: Vector2, step: float) -> void:
 
 func center_on_tile(tile_pos: Vector2i, tile_size: int) -> void:
 	position = Vector2(tile_pos) * tile_size + Vector2(tile_size / 2.0, tile_size / 2.0)
+
+
+# Phase 29: Saved camera positions
+
+func save_position(slot: int) -> void:
+	## Save current camera position to a slot (0-3).
+	if slot >= 0 and slot < _saved_positions.size():
+		_saved_positions[slot] = position
+		print("[Camera] Position saved to slot %d: %s" % [slot, str(position)])
+
+
+func recall_position(slot: int) -> bool:
+	## Recall a saved camera position. Returns true if successful.
+	if slot >= 0 and slot < _saved_positions.size() and _saved_positions[slot] != null:
+		position = _saved_positions[slot]
+		print("[Camera] Position recalled from slot %d: %s" % [slot, str(position)])
+		return true
+	return false

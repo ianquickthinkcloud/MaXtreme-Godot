@@ -62,6 +62,14 @@ var _turn_report_items: Array = []  # Phase 23: Accumulate events during turn pr
 var _prev_unit_counts: Dictionary = {}  # Phase 23: Track production completion {player_id: count}
 const AUTOSAVE_SLOT := 10  # Phase 24: Auto-save slot number
 
+# Phase 29: Keyboard Shortcuts & UX
+var _unit_groups: Dictionary = {}  # {1-9: Array[int] of unit IDs}
+var _box_selecting := false
+var _box_select_start := Vector2.ZERO  # Screen position
+var _box_select_rect: ColorRect = null  # Visual feedback
+var _selected_units: Array = []  # Multi-select unit IDs (empty = use selected_unit_id)
+var _shift_held := false  # Track shift for path preview
+
 
 func _ready() -> void:
 	# Get references to child nodes
@@ -355,6 +363,13 @@ func _update_hover_preview(hover_tile: Vector2i) -> void:
 	if overlay.is_tile_reachable(hover_tile) and pathfinder:
 		var path = pathfinder.calculate_path(selected_unit_id, hover_tile)
 		overlay.set_path_preview(path)
+	elif _shift_held and pathfinder:
+		# Phase 29: Shift+hover shows path even outside movement range
+		var path = pathfinder.calculate_path(selected_unit_id, hover_tile)
+		if not path.is_empty():
+			overlay.set_path_preview(path)
+		else:
+			overlay.clear_path_preview()
 	else:
 		overlay.clear_path_preview()
 
@@ -387,12 +402,24 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _awaiting_attack:
 		return
 
+	# --- Phase 29: Keyboard Shortcuts ---
+	if event is InputEventKey:
+		var ke := event as InputEventKey
+		_shift_held = ke.shift_pressed
+		if ke.pressed and not ke.echo:
+			if _handle_keyboard_shortcut(ke):
+				get_viewport().set_input_as_handled()
+				return
+
 	if event is InputEventMouseButton:
 		var mb = event as InputEventMouseButton
 		if mb.pressed:
 			if mb.button_index == MOUSE_BUTTON_LEFT:
 				if _build_mode:
 					_handle_build_click()
+				elif mb.shift_pressed:
+					# Phase 29: Start box select
+					_start_box_select(mb.position)
 				else:
 					_handle_left_click(mb.position)
 				get_viewport().set_input_as_handled()
@@ -402,6 +429,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				else:
 					_handle_right_click()
 				get_viewport().set_input_as_handled()
+		else:
+			# Mouse button released
+			if mb.button_index == MOUSE_BUTTON_LEFT and _box_selecting:
+				_finish_box_select(mb.position)
+				get_viewport().set_input_as_handled()
+
+	# Phase 29: Update box select visual during drag
+	if event is InputEventMouseMotion and _box_selecting:
+		_update_box_select((event as InputEventMouseMotion).position)
 
 
 func _handle_left_click(screen_pos: Vector2) -> void:
@@ -460,6 +496,7 @@ func _handle_right_click() -> void:
 
 func _select_unit(unit_id: int) -> void:
 	selected_unit_id = unit_id
+	_selected_units.clear()  # Phase 29: Clear multi-select on single selection
 	unit_renderer.selected_unit_id = unit_id
 	unit_renderer.queue_redraw()
 
@@ -489,6 +526,7 @@ func _select_unit(unit_id: int) -> void:
 
 func _deselect_unit() -> void:
 	selected_unit_id = -1
+	_selected_units.clear()  # Phase 29: Clear multi-select
 	unit_renderer.selected_unit_id = -1
 	unit_renderer.queue_redraw()
 	overlay.clear_all()
@@ -2025,6 +2063,333 @@ func _refresh_resource_overlay() -> void:
 						"value": res.get("value", 0)
 					})
 	overlay.set_resource_overlay(resource_tiles)
+
+
+# =============================================================================
+# PHASE 29: KEYBOARD SHORTCUTS & UX
+# =============================================================================
+
+func _handle_keyboard_shortcut(ke: InputEventKey) -> bool:
+	## Process a keypress and return true if handled.
+	var kc: int = ke.keycode
+
+	# --- 29.6: Screenshot (Alt+C) ---
+	if ke.alt_pressed and kc == KEY_C:
+		_take_screenshot()
+		return true
+
+	# --- 29.4: Saved camera positions (F5-F8 save with Alt, recall without) ---
+	if kc >= KEY_F5 and kc <= KEY_F8:
+		var slot: int = kc - KEY_F5  # 0-3
+		if ke.alt_pressed:
+			camera.save_position(slot)
+			hud.show_alert("Camera position %d saved" % (slot + 1), Color(0.3, 0.85, 0.5))
+		else:
+			if camera.recall_position(slot):
+				hud.show_alert("Camera position %d recalled" % (slot + 1), Color(0.3, 0.7, 1.0))
+		return true
+
+	# --- 29.2: Unit group hotkeys (Ctrl+1-9 to assign, 1-9 to recall) ---
+	if kc >= KEY_1 and kc <= KEY_9:
+		var group_num: int = kc - KEY_0  # 1-9
+		if ke.ctrl_pressed:
+			_assign_unit_group(group_num)
+			return true
+		else:
+			_recall_unit_group(group_num)
+			return true
+
+	# --- 29.1: RTS hotkeys for unit commands ---
+	if selected_unit_id == -1:
+		# Global hotkeys (no unit selected)
+		match kc:
+			KEY_ENTER, KEY_KP_ENTER:
+				hud.end_turn_pressed.emit()
+				return true
+			KEY_SPACE:
+				_cycle_to_next_idle_unit()
+				return true
+			KEY_TAB:
+				_cycle_to_next_unit(ke.shift_pressed)
+				return true
+		return false
+
+	# Unit command hotkeys
+	match kc:
+		KEY_A:
+			_on_command_pressed("manual_fire")
+			return true
+		KEY_S:
+			_on_command_pressed("sentry")
+			return true
+		KEY_G:
+			_on_command_pressed("stop")
+			return true
+		KEY_R:
+			_on_command_pressed("repair")
+			return true
+		KEY_L:
+			_on_command_pressed("load")
+			return true
+		KEY_U:
+			_on_command_pressed("activate")
+			return true
+		KEY_M:
+			_on_command_pressed("mining")
+			return true
+		KEY_B:
+			hud.build_pressed.emit()
+			return true
+		KEY_I:
+			_on_command_pressed("info")
+			return true
+		KEY_T:
+			_on_command_pressed("transfer")
+			return true
+		KEY_X:
+			_on_command_pressed("self_destroy")
+			return true
+		KEY_N:
+			_on_command_pressed("rename")
+			return true
+		KEY_V:
+			_on_command_pressed("survey")
+			return true
+		KEY_P:
+			_on_command_pressed("path_build")
+			return true
+		KEY_C:
+			_on_command_pressed("clear")
+			return true
+		KEY_DELETE:
+			_on_command_pressed("self_destroy")
+			return true
+		KEY_ENTER, KEY_KP_ENTER:
+			hud.end_turn_pressed.emit()
+			return true
+		KEY_SPACE:
+			_cycle_to_next_idle_unit()
+			return true
+		KEY_TAB:
+			_cycle_to_next_unit(ke.shift_pressed)
+			return true
+
+	return false
+
+
+# --- 29.2: Unit Groups ---
+
+func _assign_unit_group(group_num: int) -> void:
+	## Assign selected unit(s) to a group.
+	var ids: Array = []
+	if _selected_units.size() > 0:
+		ids = _selected_units.duplicate()
+	elif selected_unit_id != -1:
+		ids = [selected_unit_id]
+	if ids.is_empty():
+		return
+	_unit_groups[group_num] = ids
+	hud.show_alert("Group %d: %d unit(s) assigned" % [group_num, ids.size()],
+		Color(0.3, 0.85, 0.5))
+	print("[Game] Group %d assigned: %s" % [group_num, str(ids)])
+
+
+func _recall_unit_group(group_num: int) -> void:
+	## Recall a unit group.
+	if not _unit_groups.has(group_num):
+		hud.show_alert("Group %d is empty" % group_num, Color(0.7, 0.65, 0.5))
+		return
+	var ids: Array = _unit_groups[group_num]
+	if ids.is_empty():
+		return
+
+	# Validate units still exist
+	var valid_ids: Array = []
+	for uid in ids:
+		var u = _find_unit(uid)
+		if u:
+			valid_ids.append(uid)
+	_unit_groups[group_num] = valid_ids
+
+	if valid_ids.is_empty():
+		hud.show_alert("Group %d: no surviving units" % group_num, Color(1.0, 0.5, 0.4))
+		return
+
+	# Select first unit and center camera on it
+	_select_unit(valid_ids[0])
+	var unit = _find_unit(valid_ids[0])
+	if unit:
+		camera.center_on_tile(unit.get_position(), TILE_SIZE)
+
+	if valid_ids.size() > 1:
+		_selected_units = valid_ids
+		hud.show_alert("Group %d: %d units" % [group_num, valid_ids.size()],
+			Color(0.3, 0.7, 1.0))
+
+
+# --- 29.3: Box-Select / Multi-Select ---
+
+func _start_box_select(screen_pos: Vector2) -> void:
+	## Begin a box selection drag.
+	_box_selecting = true
+	_box_select_start = screen_pos
+	if not _box_select_rect:
+		_box_select_rect = ColorRect.new()
+		_box_select_rect.color = Color(0.2, 0.6, 1.0, 0.2)
+		_box_select_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		get_tree().root.add_child(_box_select_rect)
+	_box_select_rect.visible = true
+	_box_select_rect.position = screen_pos
+	_box_select_rect.size = Vector2.ZERO
+
+
+func _update_box_select(screen_pos: Vector2) -> void:
+	## Update box selection visual during drag.
+	if not _box_select_rect:
+		return
+	var tl := Vector2(min(_box_select_start.x, screen_pos.x), min(_box_select_start.y, screen_pos.y))
+	var br := Vector2(max(_box_select_start.x, screen_pos.x), max(_box_select_start.y, screen_pos.y))
+	_box_select_rect.position = tl
+	_box_select_rect.size = br - tl
+
+
+func _finish_box_select(screen_pos: Vector2) -> void:
+	## Finish box selection and select units within the rectangle.
+	_box_selecting = false
+	if _box_select_rect:
+		_box_select_rect.visible = false
+
+	# Calculate the screen-space rectangle
+	var tl := Vector2(min(_box_select_start.x, screen_pos.x), min(_box_select_start.y, screen_pos.y))
+	var br := Vector2(max(_box_select_start.x, screen_pos.x), max(_box_select_start.y, screen_pos.y))
+
+	# If the rectangle is too small, treat as a regular click
+	if (br - tl).length() < 10:
+		_handle_left_click(_box_select_start)
+		return
+
+	# Convert screen rectangle corners to world positions then to tiles
+	var world_tl := camera.get_global_transform().affine_inverse() * tl
+	var world_br := camera.get_global_transform().affine_inverse() * br
+
+	# More reliable: use screen_to_world via camera transform
+	var vp_size := get_viewport_rect().size
+	var cam_pos := camera.get_screen_center_position()
+	var cam_zoom := camera.zoom
+
+	# Convert screen coords to world coords
+	world_tl = cam_pos + (tl - vp_size / 2.0) / cam_zoom
+	world_br = cam_pos + (br - vp_size / 2.0) / cam_zoom
+
+	var tile_tl := map_renderer.world_to_tile(world_tl)
+	var tile_br := map_renderer.world_to_tile(world_br)
+
+	# Find our units in the box
+	var selected_ids: Array = []
+	var vehicles: Array = engine.get_player_vehicles(current_player)
+	for v in vehicles:
+		var pos: Vector2i = v.get_position()
+		if pos.x >= tile_tl.x and pos.x <= tile_br.x and pos.y >= tile_tl.y and pos.y <= tile_br.y:
+			selected_ids.append(v.get_id())
+
+	if selected_ids.is_empty():
+		return
+
+	# Select first unit for the HUD
+	_select_unit(selected_ids[0])
+	_selected_units = selected_ids
+
+	if selected_ids.size() > 1:
+		hud.show_alert("%d units selected" % selected_ids.size(), Color(0.3, 0.7, 1.0))
+	print("[Game] Box selected: %s" % str(selected_ids))
+
+
+# --- 29.5: Path Preview (Shift+hover) ---
+# Path preview is already triggered on hover when a unit is selected (see _update_hover_preview).
+# The shift key is tracked via _shift_held. When shift is held while hovering, we force
+# path preview display even if the tile is not in reachable range (showing a long-distance path).
+# This is handled by modifying _update_hover_preview below.
+
+# --- 29.6: Screenshot ---
+
+func _take_screenshot() -> void:
+	## Capture a screenshot and save to user data folder.
+	var img: Image = get_viewport().get_texture().get_image()
+	if not img:
+		hud.show_alert("Screenshot failed", Color(1.0, 0.4, 0.35))
+		return
+
+	var timestamp: String = Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
+	var dir_path := "user://screenshots"
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+	var file_path := "%s/maxtreme_%s.png" % [dir_path, timestamp]
+	var err := img.save_png(file_path)
+	if err == OK:
+		hud.show_alert("Screenshot saved: %s" % file_path.get_file(), Color(0.3, 0.85, 0.5))
+		print("[Game] Screenshot saved: ", file_path)
+	else:
+		hud.show_alert("Screenshot error: %d" % err, Color(1.0, 0.4, 0.35))
+
+
+# --- Unit cycling helpers ---
+
+func _cycle_to_next_idle_unit() -> void:
+	## Cycle to the next idle unit belonging to the current player.
+	var vehicles: Array = engine.get_player_vehicles(current_player)
+	var candidates: Array = []
+	for v in vehicles:
+		# Idle = has movement points, not sentry, not disabled, not working
+		if v.get_speed() > 0 and not v.is_sentry_active() and not v.is_disabled() and not v.is_working():
+			candidates.append(v)
+
+	if candidates.is_empty():
+		hud.show_alert("No idle units", Color(0.7, 0.65, 0.5))
+		return
+
+	# Find next candidate after currently selected
+	var start_idx := 0
+	if selected_unit_id != -1:
+		for i in range(candidates.size()):
+			if candidates[i].get_id() == selected_unit_id:
+				start_idx = (i + 1) % candidates.size()
+				break
+
+	var next_unit = candidates[start_idx]
+	_select_unit(next_unit.get_id())
+	camera.center_on_tile(next_unit.get_position(), TILE_SIZE)
+
+
+func _cycle_to_next_unit(reverse: bool) -> void:
+	## Cycle through all units (Tab / Shift+Tab).
+	var vehicles: Array = engine.get_player_vehicles(current_player)
+	var buildings: Array = engine.get_player_buildings(current_player)
+	var all_units: Array = []
+	for v in vehicles:
+		all_units.append(v)
+	for b in buildings:
+		all_units.append(b)
+
+	if all_units.is_empty():
+		return
+
+	# Find current index
+	var current_idx := -1
+	if selected_unit_id != -1:
+		for i in range(all_units.size()):
+			if all_units[i].get_id() == selected_unit_id:
+				current_idx = i
+				break
+
+	var next_idx: int
+	if reverse:
+		next_idx = (current_idx - 1 + all_units.size()) % all_units.size() if current_idx >= 0 else all_units.size() - 1
+	else:
+		next_idx = (current_idx + 1) % all_units.size() if current_idx >= 0 else 0
+
+	var next_unit = all_units[next_idx]
+	_select_unit(next_unit.get_id())
+	camera.center_on_tile(next_unit.get_position(), TILE_SIZE)
 
 
 # =============================================================================

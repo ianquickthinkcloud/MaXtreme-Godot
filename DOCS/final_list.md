@@ -1,6 +1,6 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 28)
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 29)
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
@@ -22,13 +22,13 @@
 | 26 | Construction & Building Enhancements | DONE | 7/7 |
 | 27 | End-Game | DONE | 8/8 |
 | 28 | Reports & Statistics | DONE | 4/4 |
-| **29** | **Keyboard Shortcuts & UX** | **UP NEXT** | **0/6** |
-| 30 | Preferences & Settings | TODO | 0/6 |
+| 29 | Keyboard Shortcuts & UX | DONE | 6/6 |
+| **30** | **Preferences & Settings** | **UP NEXT** | **0/6** |
 | 31 | Advanced Unit Features | TODO | 0/9 |
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 11 phases (87 items) | Remaining: 5 phases (36 items) | Total: 16 phases (123 items)**
+**Completed: 12 phases (93 items) | Remaining: 4 phases (30 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -781,16 +781,30 @@ positions along the horizontal center of the map. Players have no choice.
 - **Global command handling**: Refactored `_on_command_pressed()` in `main_game.gd` to handle global commands (reports, research, bases, overlays) before the unit-selection guard, so they work regardless of whether a unit is selected
 - `main_game.gd`: New command functions `_cmd_open_casualties()`, `_cmd_open_player_stats()`, `_cmd_open_army()`, `_cmd_open_economy()` gather data from engine and pass to HUD show functions
 
-## Phase 29: Keyboard Shortcuts & UX — **LOW PRIORITY**
+## Phase 29: Keyboard Shortcuts & UX — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 29.1 | RTS hotkeys (A, S, G, etc.) | **MISSING** | Medium |
-| 29.2 | Unit group hotkeys (Ctrl+1-9, 1-9) | **MISSING** | Medium |
-| 29.3 | Box-select / shift-click multi-select | **MISSING** | Medium |
-| 29.4 | Saved camera positions (F5-F8 / Alt+F5-F8) | **MISSING** | Small |
-| 29.5 | Path preview (Shift+hover) | **MISSING** | Small |
-| 29.6 | Screenshot (Alt+C) | **MISSING** | Small |
+| 29.1 | RTS hotkeys (A, S, G, etc.) | **DONE** | Medium |
+| 29.2 | Unit group hotkeys (Ctrl+1-9, 1-9) | **DONE** | Medium |
+| 29.3 | Box-select / shift-click multi-select | **DONE** | Medium |
+| 29.4 | Saved camera positions (F5-F8 / Alt+F5-F8) | **DONE** | Small |
+| 29.5 | Path preview (Shift+hover) | **DONE** | Small |
+| 29.6 | Screenshot (Alt+C) | **DONE** | Small |
+
+**Implementation notes:**
+
+**GDScript — `main_game.gd`:**
+- **RTS hotkeys** (29.1): `_handle_keyboard_shortcut()` dispatches keypresses to existing command handler. Key map: A=manual fire, S=sentry, G=stop, R=repair, L=load, U=unload/activate, M=mining, B=build, I=info, T=transfer, X/Del=self-destruct, N=rename, V=survey, P=path build, C=clear rubble. Enter=end turn, Space=cycle idle units, Tab/Shift+Tab=cycle all units
+- **Unit groups** (29.2): Ctrl+1-9 assigns current selection (single or multi) to group via `_assign_unit_group()`. 1-9 recalls group via `_recall_unit_group()` — validates surviving units, selects first, centers camera. Groups stored in `_unit_groups` Dictionary
+- **Box-select** (29.3): Shift+left-click-drag draws a selection rectangle (`ColorRect` overlay). `_start_box_select()` / `_update_box_select()` / `_finish_box_select()` — converts screen rect to world tiles, finds all player vehicles in rect. Sets `_selected_units` array for multi-select. Used by group assignment
+- **Path preview** (29.5): `_shift_held` flag tracked from `InputEventKey.shift_pressed`. When Shift is held during hover, `_update_hover_preview()` shows pathfinder path even to tiles outside the current movement range — useful for planning future turns
+- **Screenshot** (29.6): Alt+C triggers `_take_screenshot()` — captures viewport image, saves as PNG to `user://screenshots/` with timestamp filename. Shows alert confirmation
+- **Unit cycling**: Space cycles to next idle unit (has movement points, not sentry/disabled/working). Tab/Shift+Tab cycles through all units. Both center the camera on the selected unit
+- **Global command fix**: Global hotkeys (Enter, Space, Tab) work without a selected unit. Unit command hotkeys require a selection
+
+**GDScript — `game_camera.gd`:**
+- **Saved positions** (29.4): `save_position(slot)` / `recall_position(slot)` store/restore camera position in 4 slots. Alt+F5-F8 saves, F5-F8 recalls. `_saved_positions` array stores Vector2 positions
 
 ## Phase 30: Preferences & Settings — **LOW PRIORITY**
 
