@@ -19,6 +19,7 @@ var _time := 0.0
 var _load_dialog: Window = null
 var _load_list: VBoxContainer = null
 var _continue_button: Button = null
+var _credits_dialog: Window = null  # Phase 30: Credits/About
 
 
 func _ready() -> void:
@@ -31,7 +32,7 @@ func _ready() -> void:
 	settings_button.pressed.connect(_on_settings)
 	exit_button.pressed.connect(_on_exit)
 
-	version_label.text = "MaXtreme v0.7.0 -- Phase 24"
+	version_label.text = "MaXtreme v0.10.0 -- Phase 30"
 
 	# Phase 24: Enable Load Game button
 	load_game_button.disabled = false
@@ -43,6 +44,10 @@ func _ready() -> void:
 	# Phase 24: Add Continue button and Load dialog
 	_create_load_dialog()
 	_add_continue_button()
+
+	# Phase 30: Add Credits button and dialog
+	_create_credits_dialog()
+	_add_credits_button()
 
 	# Try to load the logo image from data/gfx/
 	if logo_texture:
@@ -253,3 +258,140 @@ func _on_settings() -> void:
 func _on_exit() -> void:
 	AudioManager.play_sound("click")
 	GameManager.quit_game()
+
+
+# =============================================================================
+# PHASE 30: CREDITS / ABOUT SCREEN
+# =============================================================================
+
+func _add_credits_button() -> void:
+	## Add a "Credits" button after the Exit button.
+	var credits_btn := Button.new()
+	credits_btn.text = "CREDITS"
+	credits_btn.custom_minimum_size = exit_button.custom_minimum_size
+	credits_btn.add_theme_font_size_override("font_size", exit_button.get_theme_font_size("font_size"))
+	credits_btn.tooltip_text = "About MaXtreme"
+	credits_btn.pressed.connect(_on_credits)
+
+	var parent := exit_button.get_parent()
+	if parent:
+		parent.add_child(credits_btn)
+		parent.move_child(credits_btn, exit_button.get_index())
+
+
+func _on_credits() -> void:
+	AudioManager.play_sound("click")
+	if _credits_dialog:
+		_credits_dialog.popup_centered()
+
+
+func _create_credits_dialog() -> void:
+	_credits_dialog = Window.new()
+	_credits_dialog.title = "About MaXtreme"
+	_credits_dialog.size = Vector2i(520, 500)
+	_credits_dialog.visible = false
+	_credits_dialog.transient = true
+	add_child(_credits_dialog)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	_credits_dialog.add_child(margin)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 10)
+	scroll.add_child(vbox)
+
+	# Title
+	var title := Label.new()
+	title.text = "MaXtreme"
+	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_color_override("font_color", Color(0.3, 0.85, 1.0))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "Mechanized Assault & Exploration — Reloaded for Godot"
+	subtitle.add_theme_font_size_override("font_size", 13)
+	subtitle.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(subtitle)
+
+	vbox.add_child(HSeparator.new())
+
+	# About section
+	_add_credits_section(vbox, "About",
+		"MaXtreme is a faithful reimplementation of M.A.X.: Mechanized Assault\n" +
+		"& Exploration in the Godot 4.x engine using GDExtension and C++20.\n\n" +
+		"The original M.A.X. was developed by Interplay in 1996. M.A.X.R.\n" +
+		"(Reloaded) was an open-source recreation by the community.\n" +
+		"MaXtreme brings this classic to modern hardware with a new UI.")
+
+	vbox.add_child(HSeparator.new())
+
+	# Original M.A.X.R. credits
+	_add_credits_section(vbox, "M.A.X.R. Engine",
+		"Original M.A.X.R. codebase used under GPL v2.\n" +
+		"Contributors: Paul Grathwohl, Eiko, and the M.A.X.R. community.\n" +
+		"https://maxr.org")
+
+	vbox.add_child(HSeparator.new())
+
+	# Godot port credits
+	_add_credits_section(vbox, "MaXtreme Godot Port",
+		"Ported to Godot 4.x with GDExtension.\n" +
+		"Game logic: C++20 core engine via GDExtension.\n" +
+		"UI & Rendering: GDScript with Godot 2D engine.")
+
+	vbox.add_child(HSeparator.new())
+
+	# Technology
+	_add_credits_section(vbox, "Technology",
+		"Engine: Godot 4.x\n" +
+		"Extension: godot-cpp (GDExtension C++)\n" +
+		"Build: SCons\n" +
+		"License: GNU General Public License v2")
+
+	vbox.add_child(HSeparator.new())
+
+	# Version info
+	var ver_lbl := Label.new()
+	ver_lbl.text = "Version 0.10.0 — Phase 30"
+	ver_lbl.add_theme_font_size_override("font_size", 11)
+	ver_lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.6))
+	ver_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(ver_lbl)
+
+	# Close button
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(120, 36)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close_btn.pressed.connect(func(): _credits_dialog.visible = false)
+	vbox.add_child(close_btn)
+
+	_credits_dialog.close_requested.connect(func(): _credits_dialog.visible = false)
+
+
+func _add_credits_section(parent: VBoxContainer, header_text: String, body_text: String) -> void:
+	var header := Label.new()
+	header.text = header_text
+	header.add_theme_font_size_override("font_size", 16)
+	header.add_theme_color_override("font_color", Color(0.8, 0.85, 0.5))
+	parent.add_child(header)
+
+	var body := Label.new()
+	body.text = body_text
+	body.add_theme_font_size_override("font_size", 12)
+	body.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(body)

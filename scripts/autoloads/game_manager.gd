@@ -12,8 +12,13 @@ var settings: Dictionary = {
 	"audio_sfx": 80,
 	"display_fullscreen": false,
 	"display_vsync": true,
+	"display_shadows": true,
+	"display_animations": true,
+	"display_effects": true,
+	"display_tracks": true,
 	"camera_edge_scroll": true,
 	"camera_scroll_speed": 600,
+	"autosave_enabled": true,
 }
 
 const SETTINGS_PATH := "user://settings.cfg"

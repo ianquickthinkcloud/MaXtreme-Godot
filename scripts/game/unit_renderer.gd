@@ -207,15 +207,24 @@ func _draw() -> void:
 	var bottom_right := inv_xform * vp_size
 	var visible_rect := Rect2(top_left, bottom_right - top_left).grow(TILE_SIZE * 2)
 
+	# Phase 30: Read display settings from GameManager
+	var show_shadows := true
+	var show_effects := true
+	var gm = get_node_or_null("/root/GameManager")
+	if gm and gm.settings:
+		show_shadows = gm.settings.get("display_shadows", true)
+		show_effects = gm.settings.get("display_effects", true)
+
 	# Two-pass rendering: shadows first, then units on top
-	# Pass 1: Shadows
-	for unit in _unit_data:
-		var world_pos := _get_unit_world_pos(unit)
-		if not visible_rect.has_point(world_pos):
-			continue
-		if _is_hidden_by_fog(unit):
-			continue
-		_draw_shadow(unit, world_pos)
+	# Pass 1: Shadows (Phase 30: respect display_shadows setting)
+	if show_shadows:
+		for unit in _unit_data:
+			var world_pos := _get_unit_world_pos(unit)
+			if not visible_rect.has_point(world_pos):
+				continue
+			if _is_hidden_by_fog(unit):
+				continue
+			_draw_shadow(unit, world_pos)
 
 	# Pass 2: Units
 	for unit in _unit_data:
@@ -244,14 +253,15 @@ func _draw() -> void:
 		elif unit["is_building"] and unit["build_progress"] < 1.0:
 			_draw_build_progress(unit, world_pos)
 
-		# Working indicator for buildings
-		if unit["is_building"] and unit["is_working"]:
+		# Working indicator for buildings (Phase 30: respect display_effects setting)
+		if show_effects and unit["is_building"] and unit["is_working"]:
 			_draw_working_effect(unit, world_pos)
 
-		# Damage cracks
-		var hp_ratio := float(unit["hp"]) / maxf(float(unit["hp_max"]), 1.0)
-		if hp_ratio < DAMAGE_THRESHOLD and hp_ratio > 0:
-			_draw_damage_effect(world_pos, hp_ratio, unit["is_building"])
+		# Damage cracks (Phase 30: respect display_effects setting)
+		if show_effects:
+			var hp_ratio := float(unit["hp"]) / maxf(float(unit["hp_max"]), 1.0)
+			if hp_ratio < DAMAGE_THRESHOLD and hp_ratio > 0:
+				_draw_damage_effect(world_pos, hp_ratio, unit["is_building"])
 
 		# Phase 19: State indicator badges
 		_draw_state_badges(unit, world_pos)
@@ -337,15 +347,21 @@ func _draw_vehicle(unit: Dictionary, world_pos: Vector2) -> void:
 	var anim_info: Dictionary = _anim_unit_types.get(unit["type_name"], {})
 	var tex: Texture2D = null
 
+	# Phase 30: Check display_animations setting
+	var show_anims := true
+	var gm_ref = get_node_or_null("/root/GameManager")
+	if gm_ref and gm_ref.settings:
+		show_anims = gm_ref.settings.get("display_animations", true)
+
 	if anim_info.get("has_anim", false) and anim_info.get("frame_count", 0) > 0:
 		# Animated unit: cycle through frames
 		var frame_count: int = anim_info["frame_count"]
-		var frame: int = int(_anim_time * ANIM_FPS) % frame_count
-		# Only animate if unit is moving
-		if move_animator and move_animator.is_animating(unit["id"]):
+		var frame: int = int(_anim_time * ANIM_FPS) % frame_count if show_anims else 0
+		# Only animate if unit is moving and animations enabled
+		if show_anims and move_animator and move_animator.is_animating(unit["id"]):
 			tex = sprite_cache.get_vehicle_anim_frame(unit["type_name"], direction, frame)
 		else:
-			# Standing still: use frame 0
+			# Standing still or animations disabled: use frame 0
 			tex = sprite_cache.get_vehicle_anim_frame(unit["type_name"], direction, 0)
 			if not tex:
 				tex = sprite_cache.get_vehicle_texture(unit["type_name"], direction)

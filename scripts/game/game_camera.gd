@@ -45,6 +45,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	# Phase 30: Read scroll speed from settings (fallback to PAN_SPEED constant)
+	var scroll_speed: float = PAN_SPEED
+	var edge_scroll_enabled := true
+	if Engine.has_singleton("GameManager") or get_node_or_null("/root/GameManager"):
+		var gm = get_node_or_null("/root/GameManager")
+		if gm and gm.settings:
+			scroll_speed = float(gm.settings.get("camera_scroll_speed", PAN_SPEED))
+			edge_scroll_enabled = gm.settings.get("camera_edge_scroll", true)
+
 	# Keyboard panning (WASD or arrow keys)
 	var pan := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
@@ -56,20 +65,21 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		pan.x += 1.0
 
-	# Edge scrolling
-	var mouse_pos := get_viewport().get_mouse_position()
-	var vp_size := get_viewport_rect().size
-	if mouse_pos.x < EDGE_SCROLL_MARGIN:
-		pan.x -= 1.0
-	elif mouse_pos.x > vp_size.x - EDGE_SCROLL_MARGIN:
-		pan.x += 1.0
-	if mouse_pos.y < EDGE_SCROLL_MARGIN:
-		pan.y -= 1.0
-	elif mouse_pos.y > vp_size.y - EDGE_SCROLL_MARGIN:
-		pan.y += 1.0
+	# Edge scrolling (Phase 30: respect setting)
+	if edge_scroll_enabled:
+		var mouse_pos := get_viewport().get_mouse_position()
+		var vp_size := get_viewport_rect().size
+		if mouse_pos.x < EDGE_SCROLL_MARGIN:
+			pan.x -= 1.0
+		elif mouse_pos.x > vp_size.x - EDGE_SCROLL_MARGIN:
+			pan.x += 1.0
+		if mouse_pos.y < EDGE_SCROLL_MARGIN:
+			pan.y -= 1.0
+		elif mouse_pos.y > vp_size.y - EDGE_SCROLL_MARGIN:
+			pan.y += 1.0
 
 	if pan != Vector2.ZERO:
-		position += pan.normalized() * PAN_SPEED * delta / zoom.x
+		position += pan.normalized() * scroll_speed * delta / zoom.x
 
 
 func _zoom_at(mouse_pos: Vector2, step: float) -> void:

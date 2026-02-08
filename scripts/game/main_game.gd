@@ -2701,7 +2701,9 @@ func _on_load_game_requested(slot: int) -> void:
 
 
 func _do_autosave() -> void:
-	## Auto-save at turn boundaries.
+	## Auto-save at turn boundaries (Phase 30: respect autosave_enabled setting).
+	if not GameManager.settings.get("autosave_enabled", true):
+		return
 	var turn: int = engine.get_turn_number()
 	if turn <= 1:
 		return  # Don't auto-save on the very first turn

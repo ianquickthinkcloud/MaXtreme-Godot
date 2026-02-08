@@ -1,6 +1,6 @@
 # MaXtreme — User-Journey Audit & Implementation Roadmap
 
-> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 29)
+> **Generated:** 2026-02-06 | **Revised:** 2026-02-08 (Phase 30)
 > **Audit method:** Top-down user-journey trace. Every screen and player action in
 > the original M.A.X.R. source code is walked through in sequence; the Godot
 > implementation is checked at each step.
@@ -23,12 +23,12 @@
 | 27 | End-Game | DONE | 8/8 |
 | 28 | Reports & Statistics | DONE | 4/4 |
 | 29 | Keyboard Shortcuts & UX | DONE | 6/6 |
-| **30** | **Preferences & Settings** | **UP NEXT** | **0/6** |
-| 31 | Advanced Unit Features | TODO | 0/9 |
+| 30 | Preferences & Settings | DONE | 6/6 |
+| **31** | **Advanced Unit Features** | **UP NEXT** | **0/9** |
 | 32 | Multiplayer Enhancements | TODO | 0/10 |
 | 33 | Audio & Polish | TODO | 0/5 |
 
-**Completed: 12 phases (93 items) | Remaining: 4 phases (30 items) | Total: 16 phases (123 items)**
+**Completed: 13 phases (99 items) | Remaining: 3 phases (24 items) | Total: 16 phases (123 items)**
 
 ---
 
@@ -806,16 +806,51 @@ positions along the horizontal center of the map. Players have no choice.
 **GDScript — `game_camera.gd`:**
 - **Saved positions** (29.4): `save_position(slot)` / `recall_position(slot)` store/restore camera position in 4 slots. Alt+F5-F8 saves, F5-F8 recalls. `_saved_positions` array stores Vector2 positions
 
-## Phase 30: Preferences & Settings — **LOW PRIORITY**
+## Phase 30: Preferences & Settings — `IMPLEMENTED`
 
 | # | Item | Status | Effort |
 |---|------|--------|--------|
-| 30.1 | Preferences screen UI | **MISSING** | Medium |
-| 30.2 | Display settings (animations, shadows, effects, tracks) | **MISSING** | Medium |
-| 30.3 | Audio settings (music/SFX/voice volume) | **MISSING** UI | Medium |
-| 30.4 | Scroll speed configuration | **MISSING** | Small |
-| 30.5 | Autosave toggle | **MISSING** | Small |
-| 30.6 | Credits / About screen | **MISSING** | Small |
+| 30.1 | Preferences screen UI | **DONE** | Medium |
+| 30.2 | Display settings (animations, shadows, effects, tracks) | **DONE** | Medium |
+| 30.3 | Audio settings (music/SFX/voice volume) | **DONE** | Medium |
+| 30.4 | Scroll speed configuration | **DONE** | Small |
+| 30.5 | Autosave toggle | **DONE** | Small |
+| 30.6 | Credits / About screen | **DONE** | Small |
+
+**Implementation notes:**
+
+**GDScript — `game_manager.gd`:**
+- Added new settings keys: `display_shadows`, `display_animations`, `display_effects`, `display_tracks`, `autosave_enabled` to the `settings` Dictionary with sensible defaults (all `true`)
+- All settings persisted via existing `ConfigFile` system at `user://settings.cfg`
+- `update_setting()` / `save_settings()` / `load_settings()` handle all new keys automatically
+
+**GDScript — `settings_panel.gd` (30.1, 30.2, 30.3, 30.4, 30.5):**
+- Enhanced with dynamically added Phase 30 controls (inserted before Close button)
+- **Camera section**: Scroll speed slider (200-1500, step 50) with numeric label, wired to `camera_scroll_speed` setting
+- **Display section**: 4 checkboxes — Shadows, Animations, Building Effects, Vehicle Tracks — each wired to its `display_*` setting via `GameManager.update_setting()`
+- **Gameplay section**: Autosave toggle checkbox wired to `autosave_enabled` setting
+- **Audio section**: Already existed (master/music/SFX sliders) — marked as complete
+- `_refresh_from_settings()` updated to load all new control values
+- Settings panel is reusable: accessible from both main menu and pause menu
+
+**GDScript — `game_camera.gd` (30.4):**
+- `_process()` now reads `camera_scroll_speed` and `camera_edge_scroll` from `GameManager.settings` at runtime
+- Scroll speed defaults to `PAN_SPEED` (600) if setting unavailable
+- Edge scrolling disabled when `camera_edge_scroll` is `false`
+
+**GDScript — `unit_renderer.gd` (30.2):**
+- `_draw()` reads `display_shadows` and `display_effects` from `GameManager.settings`
+- Shadow pass skipped entirely when `display_shadows` is `false`
+- Working effects and damage cracks skipped when `display_effects` is `false`
+- Vehicle animation frame cycling uses frame 0 when `display_animations` is `false`
+
+**GDScript — `main_game.gd` (30.5):**
+- `_do_autosave()` checks `GameManager.settings.get("autosave_enabled", true)` and returns early if disabled
+
+**GDScript — `main_menu.gd` (30.6):**
+- Credits button added before Exit button
+- `_create_credits_dialog()` builds a scrollable Window with sections: About, M.A.X.R. Engine, MaXtreme Godot Port, Technology, and version info
+- Version label updated to v0.10.0
 
 ## Phase 31: Advanced Unit Features — **LOW PRIORITY**
 
