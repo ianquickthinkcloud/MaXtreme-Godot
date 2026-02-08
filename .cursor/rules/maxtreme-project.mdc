@@ -1,0 +1,56 @@
+---
+description: MaXtreme project conventions, architecture, and lessons learned from the porting process
+alwaysApply: true
+---
+
+# MaXtreme Project Rules
+
+## Architecture
+
+- **Hybrid C++/GDScript**: Core game logic lives in `gdextension/src/maxr/` (original M.A.X.R. engine). GDExtension wrappers in `gdextension/src/game_*.h/.cpp` expose it to Godot. GDScript handles UI, rendering, and input.
+- **Key GDExtension classes**: `GameEngine`, `GamePlayer`, `GameUnit`, `GameActions`, `GamePathfinder`, `GameSetup`, `GameLobby`.
+- **Autoloads**: `GameManager` (settings, scene transitions), `AudioManager` (SFX pool, music, crossfade).
+- **Main game script**: `scripts/game/main_game.gd` is ~3,100 lines. Do NOT attempt to refactor/split it — GDScript lacks partial classes, and composition adds fragile indirection. It works as-is with clear section headers.
+
+## Build System
+
+- C++ compiles with: `cd gdextension && scons platform=macos target=template_debug -j8`
+- SConstruct is in `gdextension/`, not project root.
+- Compilation requires `required_permissions: ["all"]` (sandbox blocks clang++ temp files).
+
+## GDScript Type Rules
+
+- ALWAYS use explicit type annotations when the right-hand side is array indexing, Dictionary `.get()`, or `lerp()` — GDScript cannot infer types from these.
+- Use `lerpf()` instead of `lerp()` for float values to avoid Variant inference warnings.
+- Example: `var x: float = dict.get("key", 0.0)` not `var x := dict.get("key", 0.0)`
+- Example: `var item: Vector2 = array[i]` not `var item := array[i]`
+
+## C++ Patterns
+
+- Expose data to GDScript as `Dictionary` or `Array` of `Dictionary` — avoid creating new GDExtension wrapper classes for simple data.
+- Use `call_deferred("emit_signal", ...)` when emitting Godot signals from C++ callbacks (thread safety).
+- Private M.A.X.R. members: Use public getters (e.g., `cPlayer::getScore(turn)` instead of `player->pointsHistory`).
+- Always check `get_active_model()` for null before accessing model data.
+
+## Team Colour System
+
+- Magenta `#FF00FF` is the mask colour for team recolouring. Sprites with magenta pixels get those pixels replaced with the player's colour at load time.
+- `sprite_cache.gd` handles mask detection and per-player texture caching (`_recolored_cache`).
+- Tolerance is 2 per channel. Near-magenta pixels are blended with luminance.
+
+## Audio
+
+- Sound files live in `data/sounds/`, `data/vehicles/{type}/`, `data/buildings/{type}/`, `data/music/`.
+- `AudioManager.play_sound("name")` for global sounds, `play_unit_sound(type, "attack")` for per-unit.
+- Music uses crossfade system: `play_menu_music()`, `play_game_music()`, `play_victory_music()`, `play_defeat_music()`.
+
+## Documentation
+
+- `DOCS/final_list.md` is the master roadmap. Update it after each phase with implementation notes.
+- All 16 phases (18-33) are complete as of v1.0.0.
+
+## Common Pitfalls
+
+- Duplicate function names in GDScript are NOT caught at write time — only at parse/run time. Always search before adding a function.
+- Variables declared inside `if` blocks are NOT accessible outside that block in GDScript. Declare before the conditional.
+- `GameManager.settings` is a Dictionary — always use `.get("key", default)` for safe access.
